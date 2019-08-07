@@ -1,7 +1,6 @@
 package main
 
 import (
-	badger "github.com/dgraph-io/badger"
 	"github.com/didip/tollbooth"
 	"github.com/didip/tollbooth/limiter"
 	"github.com/getsentry/sentry-go"
@@ -37,13 +36,6 @@ func main() {
 		sentryHandler = sentryhttp.New(sentryhttp.Options{})
 	}
 
-	// create badger key store
-	bdb, err := badger.Open(badger.DefaultOptions("tmp/badger"))
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer bdb.Close()
-
 	// connect to MySQL db
 	db, err := DBConn(os.Getenv("db") + "?parseTime=true&loc=" + time.Local.String())
 	if err != nil {
@@ -51,10 +43,7 @@ func main() {
 	}
 	defer db.Close()
 
-	s := Server{
-		db:  db,
-		bdb: bdb,
-	}
+	s := Server{db: db}
 
 	c := cron.New()
 	err = c.AddFunc("@every 1m", s.CleanIncompleteUploads)
