@@ -25,6 +25,7 @@ RUN go get -u gopkg.in/tylerb/graceful.v1
 RUN go get -u github.com/satori/go.uuid
 RUN go get -u golang.org/x/crypto/bcrypt
 RUN go get -u github.com/robfig/cron
+RUN go get -u github.com/Pallinder/go-randomdata
 
 RUN mkdir /app
 ADD . /app/
