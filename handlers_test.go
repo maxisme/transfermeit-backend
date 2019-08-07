@@ -124,12 +124,6 @@ func TestUploadDownloadCycle(t *testing.T) {
 	user1, form1 := GenUser()
 	user2, form2 := GenUser()
 
-	// connect to socket
-	_, _, ws1, _ := ConnectWSS(user2, form2)
-	_, _, ws2, _ := ConnectWSS(user2, form2)
-	defer ws1.Close()
-	defer ws2.Close()
-
 	// UPLOAD
 
 	// create a file
@@ -159,11 +153,13 @@ func TestUploadDownloadCycle(t *testing.T) {
 	// DOWNLOAD
 
 	// fetch stored file path notification on Server that were sent when not connected
-	message := ReadSocketMessage(ws2)
+	_, _, ws, _ := ConnectWSS(user2, form2)
+	message := ReadSocketMessage(ws)
 	filePath := message.Download.FilePath
 	if len(path.Dir(filePath)) != USERDIRLEN {
 		t.Fatalf(filePath)
 	}
+	ws.Close()
 
 	// attempt to download file
 	form2.Set("UUID_key", user2.UUIDKey)
@@ -185,9 +181,6 @@ func TestUploadDownloadCycle(t *testing.T) {
 	if rr2.Body.String() != password {
 		t.Errorf("Got %v expected %v", rr2.Body.String(), password)
 	}
-
-	// check reduced bandwidth allowance of user1
-	ws1.ReadMessage()
 }
 
 func TestCodeTimeout(t *testing.T) {
