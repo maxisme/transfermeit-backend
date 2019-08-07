@@ -3,12 +3,16 @@ package main
 import (
 	"database/sql"
 	"log"
+	"math/rand"
 	"time"
 )
 
 var CODELEN = 7
 var UUIDKEYLEN = 200
-var DEFAULTMIN = 10
+var (
+	DEFAULTMIN = 10
+	MAXMINS    = 60
+)
 var (
 	FREEUSER = 0
 	PAIDUSER = 1
@@ -27,36 +31,32 @@ type User struct {
 	Code        string    `json:"user_code"`
 	Bandwidth   int       `json:"bw_left"`
 	MaxFileSize int       `json:"max_fs"`
-	TimeLeft    time.Time `json:"time_left"`
+	EndTime     time.Time `json:"end_time"`
 	MinsAllowed int       `json:"mins_allowed"`
+	WantedMins  int       `json:"wanted_mins"`
 	Tier        int       `json:"user_tier"`
 	Credit      float64   `json:"credit"`
-	UUID        string
-	UUIDKey     string
-	PublicKey   string
+	UUID        string    `json:"-"`
+	UUIDKey     string    `json:"UUID_key"`
+	PublicKey   string    `json:"-"`
 }
 
-func CreateNewUser(db *sql.DB, user User) bool {
+func CreateNewUser(db *sql.DB, user User) {
 	_, err := db.Exec(`
-	INSERT INTO user (code, UUID, UUID_key, public_key, created_dttm, registered_dttm)
-	VALUES (?, ?, ?, ?, NOW(), NOW())`, user.Code, Hash(user.UUID), Hash(user.UUIDKey), user.PublicKey)
-	Err(err)
-	if err != nil {
-		return false
-	}
-	return true
+	INSERT INTO user (code, UUID, UUID_key, public_key, code_end_dttm, registered_dttm)
+	VALUES (?, ?, ?, ?, ?, NOW())`, user.Code, Hash(user.UUID), Hash(user.UUIDKey), user.PublicKey, user.EndTime)
+	Handle(err)
 }
 
-func UpdateUser(db *sql.DB, user User, wantedMins int) {
-	_, err := db.Exec(`
+func UpdateUser(db *sql.DB, user User) error {
+	return UpdateErr(db.Exec(`
 	UPDATE user 
-	SET code = ?, public_key = ?, wanted_mins = ?, created_dttm = NOW()
-	WHERE UUID=?`, user.Code, user.PublicKey, wantedMins, Hash(user.UUID))
-	Err(err)
+	SET code = ?, public_key = ?, wanted_mins = ?, code_end_dttm = ?
+	WHERE UUID=?`, user.Code, user.PublicKey, user.WantedMins, user.EndTime, Hash(user.UUID)))
 }
 
-func SetUserTier(db *sql.DB, user *User) {
-	SetUserCredit(db, user)
+func SetUsersTier(db *sql.DB, user *User) {
+	SetUsersCredit(db, user)
 	user.Tier = FREEUSER
 	if user.Credit >= CODECRED {
 		user.Tier = CODEUSER
@@ -67,7 +67,7 @@ func SetUserTier(db *sql.DB, user *User) {
 	}
 }
 
-func SetUserMinsAllowed(user *User) {
+func SetUsersMinsAllowed(user *User) {
 	if user.Tier == CODEUSER {
 		user.MinsAllowed = 60
 	} else if user.Tier == PERMUSER {
@@ -78,44 +78,37 @@ func SetUserMinsAllowed(user *User) {
 	user.MinsAllowed = DEFAULTMIN
 }
 
-func DeleteCode(db *sql.DB, user User) {
-	_, err := db.Exec(`UPDATE user
-	SET code = NULL
-	WHERE UUID = ? AND UUID_key = ?`, user.UUID, user.UUIDKey)
-	Err(err)
+func DeleteCode(db *sql.DB, user User) error {
+	return UpdateErr(db.Exec(`UPDATE user
+	SET code = NULL, code_end_dttm = NULL
+	WHERE UUID = ? AND UUID_key = ?`, user.UUID, user.UUIDKey))
 }
 
 func SetUserStats(db *sql.DB, user *User) {
 	// get user time left
-	timeLeft := GetUserCodeTimeLeft(db, *user)
-	if timeLeft.Sub(time.Now()) > 0 {
-		user.TimeLeft = timeLeft
-	} else {
+	SetUserCodeEndTime(db, user)
+	if user.EndTime.Sub(time.Now()) <= 0 {
 		// user has expired
 		go DeleteCode(db, *user)
 	}
 
-	// get user tier
-	SetUserTier(db, user)
-
-	// get user bandwidth left
+	SetUsersMinsAllowed(user)
+	SetUsersTier(db, user)
 	user.Bandwidth = GetUserBandwidthLeft(db, user)
-
-	// get user max upload file size
-	SetMaxFileUpload(db, user)
+	SetUsersMaxFileUpload(db, user)
 }
 
-func UserSocketConnected(db *sql.DB, user User, connected bool) {
-	_, err := db.Exec(`UPDATE user
-	SET is_connected = ?
-	WHERE UUID = ? AND UUID_key = ?`, connected, user.UUID, user.UUIDKey)
-	Err(err)
-
+func UserSocketConnected(db *sql.DB, user User, connected bool) error {
+	isConnected := 1
 	if connected {
 		log.Println("Connected:", Hash(user.UUID))
 	} else {
+		isConnected = 0
 		log.Println("Disconnected:", Hash(user.UUID))
 	}
+	return UpdateErr(db.Exec(`UPDATE user
+	SET is_connected = ?
+	WHERE UUID = ? AND UUID_key = ?`, isConnected, user.UUID, user.UUIDKey))
 }
 
 func HasUUID(db *sql.DB, user User) bool {
@@ -124,26 +117,11 @@ func HasUUID(db *sql.DB, user User) bool {
 	SELECT id
 		FROM user
 	WHERE UUID = ?`, Hash(user.UUID))
-	err := result.Scan(id)
+	err := result.Scan(&id)
 	if err == nil && id > 0 {
 		return true
 	}
 	return false
-}
-
-func SetUserCredit(db *sql.DB, user *User) {
-	if user.Credit > 0 {
-		// already have the users credit
-		return
-	}
-	result := db.QueryRow(`SELECT SUM(credit) as total_credit
-	FROM pro
-	WHERE UUID = ?`, Hash(user.UUID))
-	err := result.Scan(&user.Credit)
-	if err != nil {
-		user.Credit = 0
-	}
-	return
 }
 
 func GetUserUsedBandwidth(db *sql.DB, user User) (bytes int) {
@@ -164,27 +142,25 @@ func GetUserUsedBandwidth(db *sql.DB, user User) (bytes int) {
 }
 
 func GetUserBandwidthLeft(db *sql.DB, user *User) int {
-	SetUserCredit(db, user)
+	SetUsersCredit(db, user)
 	usedBandwidth := GetUserUsedBandwidth(db, *user)
 	creditedBandwidth := CreditToBandwidth(user.Credit)
 	return creditedBandwidth - usedBandwidth
 }
 
-func SetMaxFileUpload(db *sql.DB, user *User) {
-	SetUserCredit(db, user)
+func SetUsersMaxFileUpload(db *sql.DB, user *User) {
+	SetUsersCredit(db, user)
 	user.MaxFileSize = CreditToFileUpload(user.Credit)
 }
 
-func GetUserCodeTimeLeft(db *sql.DB, user User) time.Time {
-	var created time.Time
-	var wantedMins int
-	result := db.QueryRow(`SELECT created_dttm, wanted_mins
+func SetUserCodeEndTime(db *sql.DB, user *User) {
+	result := db.QueryRow(`SELECT code_end_dttm
 	FROM user
-	WHERE UUID = ? AND UUID_key = ?`, Hash(user.UUID), Hash(user.UUIDKey))
-	err := result.Scan(&created, &wantedMins)
-	Err(err)
-
-	return created.Add(time.Second * time.Duration(wantedMins))
+	WHERE UUID = ?`, Hash(user.UUID))
+	err := result.Scan(&user.EndTime)
+	if err != nil || user.EndTime.IsZero() {
+		user.EndTime = time.Now().UTC()
+	}
 }
 
 func CodeToUser(db *sql.DB, code string) (user User) {
@@ -193,9 +169,10 @@ func CodeToUser(db *sql.DB, code string) (user User) {
 	}
 	result := db.QueryRow(`SELECT UUID, public_key
 	FROM user
-	WHERE code = ?`, code)
+	WHERE code = ?
+	AND code_end_dttm >= NOW()`, code)
 	err := result.Scan(&user.UUID, &user.PublicKey)
-	Err(err)
+	Handle(err)
 	return
 }
 
@@ -211,4 +188,36 @@ func IsValidUserCredentials(db *sql.DB, user User) bool {
 		}
 	}
 	return false
+}
+
+func codeExists(db *sql.DB, code string) bool {
+	var id int
+	result := db.QueryRow(`SELECT id
+	FROM user
+	WHERE code = ?`, code)
+	err := result.Scan(&id)
+	return err == nil && id > 0
+}
+
+func GenUserCode(db *sql.DB) string {
+	var letter = []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+
+	for {
+		b := make([]rune, CODELEN)
+		for i := range b {
+			b[i] = letter[rand.Intn(len(letter))]
+		}
+		code := string(b)
+		if !codeExists(db, code) {
+			return code
+		}
+	}
+}
+
+func SetUserWantedMins(db *sql.DB, user *User) {
+	result := db.QueryRow(`SELECT wanted_mins
+	FROM user
+	WHERE UUID = ?`, Hash(user.UUID))
+	err := result.Scan(&user.WantedMins)
+	Handle(err)
 }

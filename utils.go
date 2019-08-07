@@ -1,21 +1,53 @@
 package main
 
 import (
+	"crypto/sha256"
+	"database/sql"
+	b64 "encoding/base64"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"github.com/gorilla/sessions"
 	"github.com/gorilla/websocket"
 	"log"
+	"math/rand"
 	"net/http"
+	"os"
 	"runtime"
 )
 
-func Err(err error) {
-	pc, _, _, _ := runtime.Caller(1)
-	details := runtime.FuncForPC(pc)
+var (
+	appSession        *sessions.Session
+	store             = sessions.NewCookieStore([]byte(os.Getenv("session_key")))
+	UPLOADSESSIONNAME = "upload"
+)
+
+func Handle(err error) {
 	if err != nil {
-		log.Fatal(err.Error() + " - " + details.Name())
+		pc, _, _, _ := runtime.Caller(1)
+		details := runtime.FuncForPC(pc)
+		log.Println("Fatal: " + err.Error() + " - " + details.Name())
 	}
+}
+
+func RandomString(n int) string {
+	var letter = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letter[rand.Intn(len(letter))]
+	}
+	return string(b)
+}
+
+func Hash(str string) string {
+	out, err := b64.StdEncoding.DecodeString(str)
+	if err == nil && len(out) > 1 {
+		// if already b64 encoded don't hash
+		log.Printf("Already hashed %d", len(out))
+		return str
+	}
+	v := sha256.Sum256([]byte(str))
+	return string(b64.StdEncoding.EncodeToString(v[:]))
 }
 
 func MegabytesToBytes(megabytes float64) int {
@@ -28,10 +60,9 @@ func BytesToMegabytes(bytes int) float64 {
 
 func CreditToFileUpload(credit float64) (bytes int) {
 	bytes = FREEFILEUPLOAD
-	cnt := 0
 	for {
 		if credit > 0 {
-			bytes += cnt * FREEFILEUPLOAD
+			bytes += FREEFILEUPLOAD
 			credit -= CREDITSTEPS
 			continue
 		}
@@ -42,10 +73,9 @@ func CreditToFileUpload(credit float64) (bytes int) {
 
 func CreditToBandwidth(credit float64) (bytes int) {
 	bytes = FREEBANDWIDTH
-	cnt := 0
 	for {
 		if credit > 0 {
-			bytes += cnt * FREEBANDWIDTH
+			bytes += FREEBANDWIDTH
 			credit -= CREDITSTEPS
 			continue
 		}
@@ -56,8 +86,9 @@ func CreditToBandwidth(credit float64) (bytes int) {
 
 func WriteError(w http.ResponseWriter, code int, message string) {
 	w.WriteHeader(code)
+	log.Println("http error:" + message)
 	_, err := w.Write([]byte(message))
-	Err(err)
+	Handle(err)
 }
 
 // calculate the size of a file after is has been encrypted with aes on the client side with RNCryptor
@@ -74,31 +105,46 @@ func FileSizeToRNCryptorBytes(bytes int) int {
 }
 
 func SendSocketMessage(message SocketMessage, UUID string, storeOnFail bool) bool {
-	if socket, ok := clients[UUID]; ok {
+	hashUUID := Hash(UUID)
+	if socket, ok := clients[hashUUID]; ok {
 		jsonReply, err := json.Marshal(message)
-		Err(err)
+		Handle(err)
 		if err = socket.WriteMessage(websocket.TextMessage, jsonReply); err == nil {
 			// successfully sent socket message
 			return true
-		} else {
-			fmt.Println(err.Error())
 		}
-		Err(err)
-		fmt.Println(err.Error())
+		Handle(err)
+	} else {
+		log.Println("No such UUID: " + hashUUID)
 	}
 
 	if storeOnFail {
-		pendingSocketMessages[UUID] = append(pendingSocketMessages[UUID], message)
+		pendingSocketMessages[hashUUID] = append(pendingSocketMessages[hashUUID], message)
 	}
+
 	return false
 }
 
-func initSession(r *http.Request) *sessions.Session {
+func InitSession(r *http.Request) *sessions.Session {
 	if appSession != nil {
 		return appSession
 	}
 	session, err := store.Get(r, UPLOADSESSIONNAME)
 	appSession = session
-	Err(err)
+	Handle(err)
 	return session
+}
+
+func UpdateErr(res sql.Result, err error) error {
+	Handle(err)
+	if err != nil {
+		return err
+	}
+
+	rowsEffected, err := res.RowsAffected()
+	Handle(err)
+	if rowsEffected == 0 {
+		return errors.New("no rows effected")
+	}
+	return err
 }

@@ -6,10 +6,7 @@ type Message struct {
 }
 
 type SocketMessage struct {
-	MessageType string   `json:"message"`
-	User        *User    `json:"user"`
-	Download    *Upload  `json:"download"`
-	Message     *Message `json:"message"`
+	User     *User    `json:"user"`
+	Download *Upload  `json:"download"`
+	Message  *Message `json:"message"`
 }
-
-var pendingSocketMessages = map[string][]SocketMessage{}

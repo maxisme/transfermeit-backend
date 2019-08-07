@@ -2,11 +2,13 @@ package main
 
 import (
 	"database/sql"
+	"github.com/dgraph-io/badger"
 	_ "github.com/go-sql-driver/mysql"
 )
 
-type server struct {
-	db *sql.DB
+type Server struct {
+	db  *sql.DB
+	bdb *badger.DB
 }
 
 func DBConn(dataSourceName string) (db *sql.DB, err error) {
