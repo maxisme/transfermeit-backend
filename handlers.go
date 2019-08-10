@@ -443,7 +443,7 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	// write uploaded file
 	dir := FILEDIR + RandomString(USERDIRLEN)
-	err = os.Mkdir(dir, 0744)
+	err = os.MkdirAll(dir, 0744)
 	Handle(err)
 	fileLocation := dir + "/" + RandomString(10) + ".tmi"
 	err = ioutil.WriteFile(fileLocation, fileBytes, 0744)
