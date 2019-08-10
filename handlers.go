@@ -54,6 +54,7 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 		UUIDKey: r.Header.Get("UUID_key"),
 	}
 
+	log.Println(r.Header)
 	if !IsValidUserCredentials(s.db, user) {
 		WriteError(w, 401, "Invalid credentials!")
 		return
