@@ -452,6 +452,7 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	upload.hash = hex.EncodeToString(hasher.Sum(nil))
 	upload.FilePath = strings.Replace(fileLocation, FILEDIR, "", -1)
+	upload.FileSize = len(fileBytes)
 	upload.expiry = time.Now().Add(time.Minute * time.Duration(upload.from.WantedMins))
 
 	err = UpdateUpload(s.db, upload)

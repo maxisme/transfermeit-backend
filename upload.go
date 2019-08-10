@@ -22,6 +22,7 @@ var FILEDIR = os.Getenv("file_dir")
 type Upload struct {
 	ID       int       `json:"-"`
 	FilePath string    `json:"file_path"`
+	FileSize int       `json:"file_size"`
 	from     User      `json:"-"`
 	to       User      `json:"-"`
 	size     int       `json:"-"`
