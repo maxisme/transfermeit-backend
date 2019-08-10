@@ -40,12 +40,6 @@ func RandomString(n int) string {
 }
 
 func Hash(str string) string {
-	out, err := b64.StdEncoding.DecodeString(str)
-	if err == nil && len(out) > 1 {
-		// if already b64 encoded don't hash
-		log.Printf("Already hashed %d", len(out))
-		return str
-	}
 	v := sha256.Sum256([]byte(str))
 	return string(b64.StdEncoding.EncodeToString(v[:]))
 }

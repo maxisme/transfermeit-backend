@@ -268,6 +268,7 @@ func (s *Server) CredentialHandler(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, 402, "Invalid UUID key")
 			return
 		} else {
+			log.Println("Creating new user " + user.UUID)
 			// create new tmi user
 			user.UUIDKey = RandomString(UUIDKEYLEN)
 			user.MaxFileSize = FREEFILEUPLOAD
@@ -291,7 +292,7 @@ func (s *Server) CredentialHandler(w http.ResponseWriter, r *http.Request) {
 		user.WantedMins = wantedMins
 
 		user.EndTime = time.Now().Add(time.Minute * time.Duration(wantedMins)).UTC()
-
+		user.UUIDKey = ""
 		go UpdateUser(s.db, user)
 	}
 
