@@ -22,10 +22,9 @@ var FILEDIR = os.Getenv("file_dir")
 type Upload struct {
 	ID       int       `json:"-"`
 	FilePath string    `json:"file_path"`
-	FileSize int       `json:"file_size"`
+	Size     int       `json:"file_size"`
 	from     User      `json:"-"`
 	to       User      `json:"-"`
-	size     int       `json:"-"`
 	hash     string    `json:"-"`
 	password string    `json:"-"`
 	expiry   time.Time `json:"-"`
@@ -88,7 +87,7 @@ func InsertUpload(db *sql.DB, upload Upload) int {
 func UpdateUpload(db *sql.DB, upload Upload) error {
 	return UpdateErr(db.Exec(`
 	UPDATE upload set size=?, file_hash=?, file_path=?, password=?, expiry_dttm=?, updated_dttm=NOW()
-	WHERE id=?`, upload.size, upload.hash, upload.FilePath, upload.password, upload.expiry, upload.ID))
+	WHERE id=?`, upload.Size, upload.hash, upload.FilePath, upload.password, upload.expiry, upload.ID))
 }
 
 func CompleteUpload(db *sql.DB, upload Upload, failed bool, expired bool) {

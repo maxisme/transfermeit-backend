@@ -90,7 +90,7 @@ func WriteError(w http.ResponseWriter, code int, message string) {
 	Handle(err)
 }
 
-// calculate the size of a file after is has been encrypted with aes on the client side with RNCryptor
+// calculate the Size of a file after is has been encrypted with aes on the client side with RNCryptor
 func FileSizeToRNCryptorBytes(bytes int) int {
 	overhead := 66
 	if bytes == 0 {

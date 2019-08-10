@@ -350,7 +350,7 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 	if user.MaxFileSize-filesize < 0 {
 		log.Printf("upload with %v difference", BytesToMegabytes(user.MaxFileSize-filesize))
 		mb := BytesToMegabytes(user.MaxFileSize)
-		m := fmt.Sprintf("This upload exceeds your %fMB max file upload size!", mb)
+		m := fmt.Sprintf("This upload exceeds your %fMB max file upload Size!", mb)
 		WriteError(w, 401, m)
 		return
 	}
@@ -363,7 +363,7 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 	upload := Upload{
 		from: user,
 		to:   User{UUID: friend.UUID},
-		size: filesize,
+		Size: filesize,
 	}
 
 	if IsAlreadyUploading(s.db, &upload) {
@@ -424,14 +424,14 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 	Handle(err)
 
-	// verify init upload against actual file size
+	// verify init upload against actual file Size
 	// should be less than expected as it is compressed
-	if int(handler.Size) > upload.size {
-		m := fmt.Sprintf("You lied about the upload size expected %v got %v!", upload.size, int(handler.Size))
+	if int(handler.Size) > upload.Size {
+		m := fmt.Sprintf("You lied about the upload Size expected %v got %v!", upload.Size, int(handler.Size))
 		WriteError(w, 401, m)
 		return
 	}
-	upload.size = int(handler.Size)
+	upload.Size = int(handler.Size)
 
 	// get file bytes
 	fileBytes, err := ioutil.ReadAll(file)
@@ -452,7 +452,6 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	upload.hash = hex.EncodeToString(hasher.Sum(nil))
 	upload.FilePath = strings.Replace(fileLocation, FILEDIR, "", -1)
-	upload.FileSize = len(fileBytes)
 	upload.expiry = time.Now().Add(time.Minute * time.Duration(upload.from.WantedMins))
 
 	err = UpdateUpload(s.db, upload)
