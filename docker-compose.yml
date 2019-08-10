@@ -22,8 +22,10 @@ services:
     restart: always
     environment:
       db: transfermeit:transfermeit@tcp(db:3306)/transfermeit
-      sentry_dsn: ${sentry_dsn}
-      server_key: ${server_key}
+      sentry_dsn: ${sentry_dsn:?err}
+      server_key: ${server_key:?err}
+      session_key: ${session_key:?err}
+      file_dir: ${file_dir:-/var/tmp/transfermeit/}
     tty: true
     ports:
       - "8080:8080"

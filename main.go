@@ -1,12 +1,12 @@
 package main
 
 import (
+	"github.com/TV4/graceful"
 	"github.com/didip/tollbooth"
 	"github.com/didip/tollbooth/limiter"
 	"github.com/getsentry/sentry-go"
 	sentryhttp "github.com/getsentry/sentry-go/http"
 	"github.com/robfig/cron"
-	"gopkg.in/tylerb/graceful.v1"
 	"log"
 	"net/http"
 	"os"
@@ -62,5 +62,5 @@ func main() {
 	mux.Handle("/register", customCallback(s.RegisterCreditHandler))
 	mux.Handle("/toggle-perm-code", customCallback(s.TogglePermCodeHandler))
 	mux.Handle("/custom-code", customCallback(s.CustomCodeHandler))
-	graceful.Run(":8080", 10*time.Minute, mux) // wait a max of 10 minute for any outstanding transfers
+	graceful.ListenAndServe(&http.Server{Addr: ":8080", Handler: mux})
 }

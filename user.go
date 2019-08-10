@@ -28,6 +28,8 @@ var (
 
 type User struct {
 	ID          int       `json:"-"`
+	PublicKey   string    `json:"-"`
+	UUID        string    `json:"-"`
 	Code        string    `json:"user_code"`
 	Bandwidth   int       `json:"bw_left"`
 	MaxFileSize int       `json:"max_fs"`
@@ -36,9 +38,7 @@ type User struct {
 	WantedMins  int       `json:"wanted_mins"`
 	Tier        int       `json:"user_tier"`
 	Credit      float64   `json:"credit"`
-	UUID        string    `json:"-"`
 	UUIDKey     string    `json:"UUID_key"`
-	PublicKey   string    `json:"-"`
 }
 
 func CreateNewUser(db *sql.DB, user User) {

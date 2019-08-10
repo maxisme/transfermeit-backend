@@ -230,11 +230,10 @@ func (s *Server) CredentialHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := User{
-		UUID:      r.Form.Get("UUID"),
-		UUIDKey:   r.Form.Get("UUID_key"),
-		PublicKey: r.Form.Get("public_key"),
-	}
+	user := User{}
+	user.UUID = r.Form.Get("UUID")
+	user.UUIDKey = r.Form.Get("UUID_key")
+	user.PublicKey = r.Form.Get("public_key")
 
 	if user.PublicKey == "" {
 		WriteError(w, 401, "Invalid form data")
