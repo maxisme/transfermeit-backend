@@ -78,7 +78,7 @@ func TestWSHandler(t *testing.T) {
 	}{
 		{"", "", false},
 		{"UUID", form.Get("UUID"), false},
-		{"UUID_key", user.UUIDKey, false},
+		{"UUID-key", user.UUIDKey, false},
 		{"Version", "1.0.1", true},
 	}
 
