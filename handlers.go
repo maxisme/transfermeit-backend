@@ -446,7 +446,7 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	dir := FILEDIR + RandomString(USERDIRLEN)
 	err = os.MkdirAll(dir, 0744)
 	Handle(err)
-	fileLocation := dir + "/" + RandomString(10) + ".tmi"
+	fileLocation := dir + "/" + handler.Filename
 	err = ioutil.WriteFile(fileLocation, fileBytes, 0744)
 	Handle(err)
 
