@@ -91,19 +91,13 @@ func UpdateUpload(db *sql.DB, upload Upload) error {
 }
 
 func CompleteUpload(db *sql.DB, upload Upload, failed bool, expired bool) {
-	if !expired {
-		// hash UUIDs
-		upload.from.UUID = Hash(upload.from.UUID)
-		upload.to.UUID = Hash(upload.to.UUID)
-	}
-
 	_, err := db.Exec(`
 	UPDATE upload 
 	SET to_uuid = NULL, /* <-- for privacy */
 	file_path = NULL, finished_dttm = NOW(), password = NULL, file_hash = NULL, failed = ?
 	WHERE from_UUID = ?
 	AND to_UUID = ?
-	AND file_path = ?`, failed, upload.from.UUID, upload.to.UUID, upload.FilePath)
+	AND file_path = ?`, failed, Hash(upload.from.UUID), Hash(upload.to.UUID), upload.FilePath)
 	Handle(err)
 
 	go DeleteDir(upload.FilePath)

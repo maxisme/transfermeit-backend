@@ -50,8 +50,8 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var user = User{
-		UUID:    r.Header.Get("Uuid"),
-		UUIDKey: r.Header.Get("Uuid_key"),
+		UUID:    r.Header.Get("UUID"),
+		UUIDKey: r.Header.Get("UUID_key"),
 	}
 
 	if !IsValidUserCredentials(s.db, user) {

@@ -77,8 +77,8 @@ func TestWSHandler(t *testing.T) {
 		out   bool
 	}{
 		{"", "", false},
-		{"Uuid", form.Get("UUID"), false},
-		{"Uuid_key", user.UUIDKey, false},
+		{"UUID", form.Get("UUID"), false},
+		{"UUID_key", user.UUIDKey, false},
 		{"Version", "1.0.1", true},
 	}
 
@@ -181,6 +181,9 @@ func TestUploadDownloadCycle(t *testing.T) {
 	if rr2.Body.String() != password {
 		t.Errorf("Got %v expected %v", rr2.Body.String(), password)
 	}
+
+	// TODO check file has been deleted from server
+	// TODO check user limits have been updated
 }
 
 func TestCodeTimeout(t *testing.T) {

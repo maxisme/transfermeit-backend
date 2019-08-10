@@ -81,7 +81,7 @@ func GenCreditUser(credit float64) (user User, form url.Values) {
 func ConnectWSS(user User, form url.Values) (*httptest.Server, *http.Response, *websocket.Conn, error) {
 	wsheader := http.Header{}
 	wsheader.Set("UUID", form.Get("UUID"))
-	wsheader.Set("Uuid_key", user.UUIDKey)
+	wsheader.Set("UUID_key", user.UUIDKey)
 	wsheader.Set("Version", "1.0")
 	return ConnectWSSHeader(wsheader)
 }
