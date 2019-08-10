@@ -111,8 +111,10 @@ func SendSocketMessage(message SocketMessage, UUID string, storeOnFail bool) boo
 		if err = socket.WriteMessage(websocket.TextMessage, jsonReply); err == nil {
 			// successfully sent socket message
 			return true
+		} else {
+			Handle(err)
 		}
-		Handle(err)
+
 	} else {
 		log.Println("No such UUID: " + hashUUID)
 	}

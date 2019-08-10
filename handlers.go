@@ -368,6 +368,7 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	if IsAlreadyUploading(s.db, &upload) {
 		// already uploading to friend so delete the currently in process upload
+		log.Println("Already uploading file from " + upload.from.UUID + " to " + upload.to.UUID)
 		go CompleteUpload(s.db, upload, true, false)
 	}
 

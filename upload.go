@@ -114,7 +114,7 @@ func CompleteUpload(db *sql.DB, upload Upload, failed bool, expired bool) {
 		mess.Message = "Your friend may have ignored the download!"
 	}
 
-	go SendSocketMessage(SocketMessage{Message: &mess}, upload.to.UUID, true)
+	go SendSocketMessage(SocketMessage{Message: &mess}, upload.from.UUID, true)
 }
 
 // remove uploaded directory
