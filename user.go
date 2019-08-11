@@ -109,7 +109,7 @@ func UserSocketConnected(db *sql.DB, user User, connected bool) error {
 	}
 	return UpdateErr(db.Exec(`UPDATE user
 	SET is_connected = ?
-	WHERE UUID = ? AND UUID_key = ?`, isConnected, user.UUID, user.UUIDKey))
+	WHERE UUID = ? AND UUID_key = ?`, isConnected, Hash(user.UUID), Hash(user.UUIDKey)))
 }
 
 func HasUUID(db *sql.DB, user User) bool {

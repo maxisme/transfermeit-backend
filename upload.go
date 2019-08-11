@@ -92,6 +92,13 @@ func UpdateUpload(db *sql.DB, upload Upload) error {
 	WHERE id=?`, upload.Size, upload.hash, upload.FilePath, upload.password, upload.expiry, upload.ID))
 }
 
+func KeepAliveUpload(db *sql.DB, user User, path string) error {
+	return UpdateErr(db.Exec(`
+	UPDATE upload set size=updated_dttm=NOW()
+	WHERE file_path=?
+	AND to_UUID`, path, Hash(user.UUID)))
+}
+
 func CompleteUpload(db *sql.DB, upload Upload, failed bool, expired bool) {
 	_, err := db.Exec(`
 	UPDATE upload 
@@ -103,7 +110,7 @@ func CompleteUpload(db *sql.DB, upload Upload, failed bool, expired bool) {
 
 	go DeleteDir(upload.FilePath)
 
-	mess := Message{
+	mess := DesktopMessage{
 		Title:   "Successful Transfer",
 		Message: "Your friend successfully downloaded the file!",
 	}
