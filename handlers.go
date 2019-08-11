@@ -479,14 +479,25 @@ func (s *Server) CompletedDownloadHandler(w http.ResponseWriter, r *http.Request
 	failed := true
 	if upload.hash != "" {
 		failed = false
-		password := GetUploadPassword(s.db, upload)
-		if password == "" {
+		password, fromUUID := GetUploadPasswordAndUUID(s.db, upload)
+		if password == "" || fromUUID == "" {
 			log.Println("No password for user. Or already uploading to user", upload)
 			http.Error(w, "No password for user", 402)
+		} else {
+			upload.from.UUID = fromUUID
+
+			// send message to user
+			go func() {
+				from := User{UUID: fromUUID}
+				SetUserStats(s.db, &from)
+				SendSocketMessage(SocketMessage{
+					User: &from,
+				}, fromUUID, true)
+			}()
 		}
 		_, err := w.Write([]byte(password))
 		Handle(err)
 	}
 
-	CompleteUpload(s.db, upload, failed, false)
+	go CompleteUpload(s.db, upload, failed, false)
 }

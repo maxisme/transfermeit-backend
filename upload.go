@@ -32,19 +32,19 @@ type Upload struct {
 	expiry   time.Time `json:"-"`
 }
 
-func GetUploadPassword(db *sql.DB, upload Upload) string {
-	var password string
+func GetUploadPasswordAndUUID(db *sql.DB, upload Upload) (password string, UUID string) {
 	result := db.QueryRow(`
-	SELECT password
+	SELECT password, from_UUID
 	FROM upload
 	WHERE finished_dttm IS NULL
 	AND to_UUID = ?
 	AND file_path = ?
 	AND file_hash = ?`, Hash(upload.to.UUID), upload.FilePath, upload.hash)
-	if err := result.Scan(&password); err != nil {
-		return ""
+	if err := result.Scan(&password, &UUID); err != nil {
+		Handle(err)
+		return "", ""
 	}
-	return password
+	return password, UUID
 }
 
 // check user isn't already uploading a file to the same friend
