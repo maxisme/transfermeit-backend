@@ -100,12 +100,12 @@ func KeepAliveUpload(db *sql.DB, user User, path string) error {
 }
 
 func CompleteUpload(db *sql.DB, upload Upload, failed bool, expired bool) {
-	_, err := db.Exec(`
+	err := UpdateErr(db.Exec(`
 	UPDATE upload 
-	SET file_path = NULL, finished_dttm = NOW(), password = NULL, file_hash = NULL, failed = ?
+	SET file_path = NULL, finished_dttm = NOW(), password = NULL, failed = ?
 	WHERE from_UUID = ?
 	AND to_UUID = ?
-	AND file_path = ?`, failed, Hash(upload.from.UUID), Hash(upload.to.UUID), upload.FilePath)
+	AND file_path = ?`, failed, Hash(upload.from.UUID), Hash(upload.to.UUID), upload.FilePath))
 	Handle(err)
 
 	go DeleteDir(upload.FilePath)
