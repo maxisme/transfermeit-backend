@@ -6,6 +6,7 @@ import (
 	"github.com/didip/tollbooth/limiter"
 	"github.com/getsentry/sentry-go"
 	sentryhttp "github.com/getsentry/sentry-go/http"
+	"github.com/patrickmn/go-cache"
 	"github.com/robfig/cron"
 	"log"
 	"net/http"
@@ -26,6 +27,8 @@ func customCallback(nextFunc func(http.ResponseWriter, *http.Request)) http.Hand
 	return h
 }
 
+var c = cache.New(1*time.Minute, 5*time.Minute)
+
 func main() {
 	// SENTRY
 	sentryDsn := os.Getenv("sentry_dsn")
@@ -45,11 +48,13 @@ func main() {
 
 	s := Server{db: db}
 
+	// clean up cron
 	c := cron.New()
 	err = c.AddFunc("@every 1m", s.CleanIncompleteUploads)
 	if err != nil {
 		log.Fatal(err)
 	}
+	c.Start()
 
 	// HANDLERS
 	mux := http.NewServeMux()
@@ -62,5 +67,7 @@ func main() {
 	mux.Handle("/register", customCallback(s.RegisterCreditHandler))
 	mux.Handle("/toggle-perm-code", customCallback(s.TogglePermCodeHandler))
 	mux.Handle("/custom-code", customCallback(s.CustomCodeHandler))
+
+	mux.HandleFunc("/live", s.liveHandler)
 	graceful.ListenAndServe(&http.Server{Addr: ":8080", Handler: mux})
 }

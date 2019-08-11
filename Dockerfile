@@ -27,6 +27,7 @@ RUN go get -u golang.org/x/crypto/bcrypt
 RUN go get -u github.com/robfig/cron
 RUN go get -u github.com/Pallinder/go-randomdata
 RUN go get -u github.com/TV4/graceful
+RUN go get -u github.com/patrickmn/go-cache
 
 RUN mkdir /app
 ADD . /app/

@@ -8,7 +8,7 @@ create table user
     is_connected tinyint(1) default 0 not null,
     UUID varchar(255) default '' not null,
     UUID_key varchar(255) default '' not null,
-    public_key text null,
+    public_key varchar(1000) null,
     registered_dttm datetime not null,
     constraint devUUID
         unique (UUID),

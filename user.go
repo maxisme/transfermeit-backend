@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"github.com/patrickmn/go-cache"
 	"log"
 	"math/rand"
 	"time"
@@ -225,4 +226,26 @@ func SetUserWantedMins(db *sql.DB, user *User) {
 	WHERE UUID = ?`, Hash(user.UUID))
 	err := result.Scan(&user.WantedMins)
 	Handle(err)
+}
+
+func FetchAllDisplayUsers(db *sql.DB) []DisplayUser {
+	var users []DisplayUser
+	u, found := c.Get("users")
+	if found {
+		users = u.([]DisplayUser)
+	} else {
+		log.Println("Refreshed user cache")
+		// fetch users from db if not in cache
+		rows, err := db.Query(`SELECT UUID, public_key, is_connected FROM user`)
+		defer rows.Close()
+		Handle(err)
+		for rows.Next() {
+			var u DisplayUser
+			err = rows.Scan(&u.UUID, &u.PubKey, &u.Connected)
+			Handle(err)
+			users = append(users, u)
+		}
+		c.Set("users", users, cache.DefaultExpiration)
+	}
+	return users
 }

@@ -546,5 +546,5 @@ func (s *Server) CompletedDownloadHandler(w http.ResponseWriter, r *http.Request
 		Handle(err)
 	}
 
-	go CompleteUpload(s.db, upload, failed, false)
+	CompleteUpload(s.db, upload, failed, false)
 }

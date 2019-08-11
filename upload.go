@@ -2,6 +2,8 @@ package main
 
 import (
 	"database/sql"
+	"github.com/go-sql-driver/mysql"
+	"github.com/patrickmn/go-cache"
 	"log"
 	"os"
 	"path"
@@ -93,8 +95,7 @@ func UpdateUpload(db *sql.DB, upload Upload) error {
 func CompleteUpload(db *sql.DB, upload Upload, failed bool, expired bool) {
 	_, err := db.Exec(`
 	UPDATE upload 
-	SET to_uuid = NULL, /* <-- for privacy */
-	file_path = NULL, finished_dttm = NOW(), password = NULL, file_hash = NULL, failed = ?
+	SET file_path = NULL, finished_dttm = NOW(), password = NULL, file_hash = NULL, failed = ?
 	WHERE from_UUID = ?
 	AND to_UUID = ?
 	AND file_path = ?`, failed, Hash(upload.from.UUID), Hash(upload.to.UUID), upload.FilePath)
@@ -153,4 +154,33 @@ func (s *Server) CleanIncompleteUploads() {
 	}
 
 	log.Println("FINISHED CLEANUP")
+}
+
+func FetchAllDisplayUploads(db *sql.DB) []DisplayUpload {
+	var uploads []DisplayUpload
+	if u, found := c.Get("uploads"); found {
+		uploads = u.([]DisplayUpload)
+	} else {
+		log.Println("Refreshed upload cache")
+		// fetch uploads from db if not in cache
+		rows, err := db.Query(`
+		SELECT from_UUID, to_UUID, expiry_dttm, size, file_hash, failed, updated_dttm, finished_dttm
+		FROM upload`)
+		defer rows.Close()
+		Handle(err)
+		for rows.Next() {
+			var u DisplayUpload
+			var fs int
+			var updated mysql.NullTime
+			var finished mysql.NullTime
+			err = rows.Scan(&u.FromUUID, &u.ToUUID, &u.FileExpiry, &fs, &u.FileHash, &u.Failed, &updated, &finished)
+			Handle(err)
+			u.Downloading = updated.Valid
+			u.Finished = finished.Valid
+			u.FileSize = BytesToReadable(fs)
+			uploads = append(uploads, u)
+		}
+		c.Set("uploads", uploads, cache.DefaultExpiration)
+	}
+	return uploads
 }

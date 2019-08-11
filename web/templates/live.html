@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+    <script src="//cdn.datatables.net/1.10.19/js/jquery.dataTables.min.js"></script>
+    <link rel="stylesheet" href="//cdn.datatables.net/1.10.19/css/jquery.dataTables.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css?family=Montserrat:200,300,400,500,600,700" rel="stylesheet">
+    <script>
+        $(document).ready(function () {
+            $('#users').DataTable();
+            $('#transfers').DataTable();
+        });
+    </script>
+    <style>
+        body {
+            font-family: "Montserrat", sans-serif;
+            color: #262626;
+        }
+
+        tbody td {
+            word-break: break-all;
+        }
+
+        thead td {
+            white-space: nowrap;
+
+        }
+
+        table.dataTable.no-footer {
+            border-bottom: 3px solid #111;
+        }
+
+        .current {
+            border: 2px solid #111 !important;
+            background: none !important;
+        }
+    </style>
+</head>
+<body>
+    <p>
+        Data refreshed every minute.
+    </p>
+
+    <h2>Transfers</h2>
+    <table id="transfers">
+        <thead>
+        <tr>
+            <td>&nbsp;</td>
+            <td>
+                From
+            </td>
+            <td>
+                To
+            </td>
+            <td>
+                File Hash
+            </td>
+            <td>
+                File Size
+            </td>
+            <td>
+                Expiry
+            </td>
+        </tr>
+        </thead>
+        <tbody>
+        {{range .Uploads}}
+            <tr>
+                <td>
+                    <i class="material-icons">
+                        {{if .Failed}}
+                            clear
+                        {{else if .Finished}}
+                            check
+                        {{else if .ToUUID}}
+                            {{if .Downloading}}
+                                cloud_download
+                            {{else}}
+                                cloud_upload
+                            {{end}}
+                        {{end}}
+                    </i>
+                </td>
+                <td>
+                    {{.FromUUID}}
+                </td>
+                <td>
+                    {{.ToUUID}}
+                </td>
+                <td>
+                    {{.FileHash}}
+                </td>
+                <td>
+                    {{.FileSize}}
+                </td>
+                <td>
+                    {{.FileExpiry}}
+                </td>
+            </tr>
+        {{end}}
+        </tbody>
+    </table>
+
+
+    <h2>Users</h2>
+    <table id="users">
+        <thead>
+        <tr>
+            <td>
+                Connected
+            </td>
+            <td>
+                User
+            </td>
+            <td>
+                Public Key
+            </td>
+        </tr>
+        </thead>
+        <tbody>
+        {{range .Users}}
+            <tr>
+                <td>
+                    <i class="material-icons">
+                        {{if .Connected}}
+                            check
+                        {{else}}
+                            clear
+                        {{end}}
+                    </i>
+                </td>
+                <td>
+                    {{.UUID}}
+                </td>
+                <td>
+                    {{.PubKey}}
+                </td>
+            </tr>
+        {{end}}
+        </tbody>
+    </table>
+</body>
+</html>

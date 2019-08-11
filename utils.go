@@ -6,13 +6,16 @@ import (
 	b64 "encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/gorilla/sessions"
 	"github.com/gorilla/websocket"
 	"log"
+	"math"
 	"math/rand"
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 )
 
 var (
@@ -148,4 +151,20 @@ func UpdateErr(res sql.Result, err error) error {
 		return errors.New("no rows effected")
 	}
 	return err
+}
+
+func BytesToReadable(bytes int) string {
+	if bytes == 0 {
+		return "0 bytes"
+	}
+
+	base := math.Floor(math.Log(float64(bytes)) / math.Log(1000))
+	units := []string{"bytes", "KB", "MB", "GB"}
+
+	stringVal := fmt.Sprintf("%.2f", float64(bytes)/math.Pow(1000, base))
+	stringVal = strings.TrimSuffix(stringVal, ".00")
+	return fmt.Sprintf("%s %v",
+		stringVal,
+		units[int(base)],
+	)
 }
