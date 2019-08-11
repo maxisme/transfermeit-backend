@@ -20,7 +20,7 @@ node() {
             }
         }
         stage('Deploy'){
-            sh 'ssh -o StrictHostKeyChecking=no jenk@transferme.it "sudo /bin/bash /root/transfermeit-backend/deploy.sh"'
+            sh 'ssh -o StrictHostKeyChecking=no jenk@sock.transferme.it "sudo /bin/bash /root/transfermeit-backend/deploy.sh"'
         }
         setBuildStatus("Build succeeded", "SUCCESS");
     } catch (err) {
