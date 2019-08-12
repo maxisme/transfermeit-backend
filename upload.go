@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"strconv"
 	"time"
 )
 
@@ -141,26 +142,24 @@ func (s *Server) CleanIncompleteUploads() {
 	log.Println("STARTED CLEANUP")
 
 	rows, err := s.db.Query(`
-	SELECT 
-		upload.id,
-		upload.file_path, 
-		upload.to_UUID,
-		upload.from_UUID
+	SELECT id, file_path, to_UUID, from_UUID
 	FROM upload
-	JOIN user ON upload.from_UUID = user.UUID
-	WHERE upload.finished_dttm IS NULL
-	AND upload.expiry_dttm IS NOT NULL AND upload.expiry_dttm > NOW()
-	AND (upload.updated_dttm IS NULL OR upload.updated_dttm + interval 1 minute <= NOW())`)
+	WHERE finished_dttm IS NULL
+	AND expiry_dttm IS NOT NULL
+	AND expiry_dttm < NOW()
+	AND (updated_dttm IS NULL OR updated_dttm + interval 1 minute > NOW())`)
 	Handle(err)
 
+	cnt := 0
 	for rows.Next() {
 		var upload Upload
 		err := rows.Scan(&upload.ID, &upload.FilePath, &upload.to.UUID, &upload.from.UUID)
 		Handle(err)
 		go CompleteUpload(s.db, upload, true, true)
+		cnt += 1
 	}
 
-	log.Println("FINISHED CLEANUP")
+	log.Println("FINISHED CLEANUP - deleted " + strconv.Itoa(cnt) + " rows")
 }
 
 func FetchAllDisplayUploads(db *sql.DB) []DisplayUpload {
