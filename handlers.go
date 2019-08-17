@@ -2,14 +2,10 @@ package main
 
 import (
 	"bytes"
-	"crypto/rsa"
 	"crypto/sha256"
-	"crypto/x509"
-	"encoding/base64"
 	"encoding/gob"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/gorilla/websocket"
 	"io/ioutil"
@@ -188,18 +184,8 @@ func (s *Server) CredentialHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	decodedPublicKey, err := base64.StdEncoding.DecodeString(user.PublicKey)
-	if err == nil {
-		re, err := x509.ParsePKIXPublicKey(decodedPublicKey)
-		if err == nil {
-			pub := re.(*rsa.PublicKey)
-			if pub == nil {
-				err = errors.New("invalid public key")
-			}
-		}
-	}
-	if err != nil {
-		WriteError(w, 401, err.Error())
+	if !IsValidPublicKey(user.PublicKey) {
+		WriteError(w, 401, "Invalid public key in keychain!")
 		return
 	}
 
