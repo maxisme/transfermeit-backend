@@ -2,9 +2,7 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/gob"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/websocket"
@@ -372,11 +370,9 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	Handle(err)
 
 	// get file hash
-	hasher := sha256.New()
-	_, err = hasher.Write(fileBytes)
-	Handle(err)
+	transfer.hash = FileHash(fileBytes)
 
-	// write uploaded file
+	// write file
 	dir := FILEDIR + RandomString(USERDIRLEN)
 	err = os.MkdirAll(dir, 0744)
 	Handle(err)
@@ -384,7 +380,6 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	err = ioutil.WriteFile(fileLocation, fileBytes, 0744)
 	Handle(err)
 
-	transfer.hash = hex.EncodeToString(hasher.Sum(nil))
 	transfer.FilePath = strings.Replace(fileLocation, FILEDIR, "", -1)
 	transfer.expiry = time.Now().Add(time.Minute * time.Duration(transfer.from.WantedMins))
 

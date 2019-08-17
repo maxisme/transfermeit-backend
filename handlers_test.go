@@ -126,6 +126,9 @@ func TestUploadDownloadCycle(t *testing.T) {
 	user1, form1 := GenUser()
 	user2, form2 := GenUser()
 
+	_, _, user1Ws, _ := ConnectWSS(user1, form1)
+	_ = ReadSocketMessage(user1Ws) // returns user when first connected so ignore this incoming message
+
 	// UPLOAD
 
 	// create a file
@@ -155,15 +158,15 @@ func TestUploadDownloadCycle(t *testing.T) {
 	// DOWNLOAD
 
 	// fetch stored file path notification on Server that were sent when not connected
-	_, _, ws, _ := ConnectWSS(user2, form2)
-	_ = ReadSocketMessage(ws) // returns user when first connected so ignore
-	message := ReadSocketMessage(ws)
+	_, _, user2Ws, _ := ConnectWSS(user2, form2)
+	_ = ReadSocketMessage(user2Ws) // returns user when first connected so ignore this incoming message
+	message := ReadSocketMessage(user2Ws)
 	fmt.Printf("%v", message)
 	filePath := message.Download.FilePath
 	if len(path.Dir(filePath)) != USERDIRLEN {
 		t.Fatalf(filePath)
 	}
-	ws.Close()
+	user2Ws.Close()
 
 	// attempt to download file
 	form2.Set("UUID_key", user2.UUIDKey)
@@ -186,8 +189,18 @@ func TestUploadDownloadCycle(t *testing.T) {
 		t.Errorf("Got %v expected %v", rr2.Body.String(), password)
 	}
 
-	// TODO check file has been deleted from server
-	// TODO check user limits have been updated
+	if _, err := os.Stat(filePath); !os.IsNotExist(err) {
+		t.Errorf("'%v' should have been deleted", filePath)
+	}
+
+	message = ReadSocketMessage(user1Ws)
+	if message.Message.Title != "Successful Transfer" {
+		t.Errorf("expected: %v got %v", "Successful Transfer", message.User.Bandwidth)
+	}
+	message = ReadSocketMessage(user1Ws)
+	if message.User.Bandwidth != FREEBANDWIDTH-fileSize {
+		t.Errorf("expected %v got %v", FREEBANDWIDTH-fileSize, message.User.Bandwidth)
+	}
 }
 
 func TestCodeTimeout(t *testing.T) {

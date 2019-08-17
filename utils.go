@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	b64 "encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -170,4 +171,11 @@ func BytesToReadable(bytes int) string {
 		stringVal,
 		units[int(base)],
 	)
+}
+
+func FileHash(bytes []byte) string {
+	hasher := sha256.New()
+	_, err := hasher.Write(bytes)
+	Handle(err)
+	return hex.EncodeToString(hasher.Sum(nil))
 }
