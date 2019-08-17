@@ -8,6 +8,7 @@ import (
 	"github.com/Pallinder/go-randomdata"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/labstack/gommon/log"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -62,7 +63,9 @@ func GenUser() (user User, form url.Values) {
 	form.Set("UUID", UUID.String())
 	form.Set("public_key", b64PubKey)
 	rr := PostRequest(form, http.HandlerFunc(s.CredentialHandler))
-	_ = json.Unmarshal(rr.Body.Bytes(), &user)
+	if err := json.Unmarshal(rr.Body.Bytes(), &user); err != nil {
+		log.Fatal(err)
+	}
 	return
 }
 
@@ -88,7 +91,10 @@ func ConnectWSS(user User, form url.Values) (*httptest.Server, *http.Response, *
 
 func ReadSocketMessage(ws *websocket.Conn) (message SocketMessage) {
 	_, mess, err := ws.ReadMessage()
-	Handle(err)
+	if err != nil {
+		Handle(err)
+		return
+	}
 	_ = json.Unmarshal(mess, &message)
 	return
 }
@@ -99,7 +105,7 @@ func ConnectWSSHeader(wsheader http.Header) (*httptest.Server, *http.Response, *
 	Handle(err)
 	if err == nil {
 		// add ws read timeout
-		_ = ws.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		_ = ws.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	}
 	return server, res, ws, err
 }

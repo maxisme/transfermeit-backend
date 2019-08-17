@@ -108,7 +108,10 @@ func FileSizeToRNCryptorBytes(bytes int) int {
 
 func SendSocketMessage(message SocketMessage, UUID string, storeOnFail bool) bool {
 	hashUUID := Hash(UUID)
-	if socket, ok := clients[hashUUID]; ok {
+	clientsMutex.RLock()
+	socket, ok := clients[hashUUID]
+	clientsMutex.RUnlock()
+	if ok {
 		jsonReply, err := json.Marshal(message)
 		Handle(err)
 		if err = socket.WriteMessage(websocket.TextMessage, jsonReply); err == nil {

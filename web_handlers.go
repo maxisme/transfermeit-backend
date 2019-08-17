@@ -12,7 +12,7 @@ type DisplayUser struct {
 	Connected bool
 }
 
-type DisplayUpload struct {
+type DisplayTransfer struct {
 	ToUUID      string
 	FromUUID    string
 	FileHash    string
@@ -24,7 +24,7 @@ type DisplayUpload struct {
 }
 
 type liveContent struct {
-	Uploads []DisplayUpload
+	Uploads []DisplayTransfer
 	Users   []DisplayUser
 }
 
@@ -33,7 +33,7 @@ func (s *Server) liveHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl := template.Must(template.ParseFiles(tmplPath))
 	data := liveContent{
 		Users:   FetchAllDisplayUsers(s.db),
-		Uploads: FetchAllDisplayUploads(s.db),
+		Uploads: FetchAllDisplayTransfers(s.db),
 	}
 	err := tmpl.Execute(w, data)
 	Handle(err)

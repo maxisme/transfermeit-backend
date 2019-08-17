@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"io"
@@ -69,6 +70,7 @@ func TestCredentialHandler(t *testing.T) {
 
 func TestWSHandler(t *testing.T) {
 	user, form := GenUser()
+	time.Sleep(time.Millisecond * time.Duration(100))
 
 	wsheader := http.Header{}
 	var headers = []struct {
@@ -154,7 +156,9 @@ func TestUploadDownloadCycle(t *testing.T) {
 
 	// fetch stored file path notification on Server that were sent when not connected
 	_, _, ws, _ := ConnectWSS(user2, form2)
+	_ = ReadSocketMessage(ws) // returns user when first connected so ignore
 	message := ReadSocketMessage(ws)
+	fmt.Printf("%v", message)
 	filePath := message.Download.FilePath
 	if len(path.Dir(filePath)) != USERDIRLEN {
 		t.Fatalf(filePath)

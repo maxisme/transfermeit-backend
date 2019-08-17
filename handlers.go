@@ -18,10 +18,14 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
-var clients = make(map[string]*websocket.Conn)
+var (
+	clients      = make(map[string]*websocket.Conn)
+	clientsMutex = sync.RWMutex{}
+)
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
@@ -292,37 +296,37 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	SetUsersMaxFileUpload(s.db, &user)
 	if user.MaxFileSize-filesize < 0 {
-		log.Printf("upload with %v difference", BytesToMegabytes(user.MaxFileSize-filesize))
+		log.Printf("transfer with %v difference", BytesToMegabytes(user.MaxFileSize-filesize))
 		mb := BytesToMegabytes(user.MaxFileSize)
-		m := fmt.Sprintf("This upload exceeds your %fMB max file upload Size!", mb)
+		m := fmt.Sprintf("This transfer exceeds your %fMB max file transfer Size!", mb)
 		WriteError(w, 401, m)
 		return
 	}
 	userBandwidthLeft := GetUserBandwidthLeft(s.db, &user)
 	if userBandwidthLeft-filesize < 0 {
-		WriteError(w, 401, "This upload exceeds today's bandwidth limit!")
+		WriteError(w, 401, "This transfer exceeds today's bandwidth limit!")
 		return
 	}
 
-	upload := Upload{
+	transfer := Transfer{
 		from: user,
 		to:   User{UUID: friend.UUID},
 		Size: filesize,
 	}
 
-	if IsAlreadyUploading(s.db, &upload) {
-		// already uploading to friend so delete the currently in process upload
-		log.Println("Already uploading file from " + upload.from.UUID + " to " + upload.to.UUID)
-		go CompleteUpload(s.db, upload, true, false)
+	if IsAlreadyTransferring(s.db, &transfer) {
+		// already uploading to friend so delete the currently in process transfer
+		log.Println("Already uploading file from " + transfer.from.UUID + " to " + transfer.to.UUID)
+		go CompleteTransfer(s.db, transfer, true, false)
 	}
 
-	upload.ID = InsertUpload(s.db, upload)
-	upload.from.UUID = "" // for privacy reasons
+	transfer.ID = InsertTransfer(s.db, transfer)
+	transfer.from.UUID = "" // for privacy reasons
 
-	// store upload in session
+	// store transfer in session
 	session := InitSession(r)
-	gob.Register(Upload{})
-	session.Values["upload"] = upload
+	gob.Register(Transfer{})
+	session.Values[UPLOADSESSIONNAME] = transfer
 	err = session.Save(r, w)
 	Handle(err)
 
@@ -345,37 +349,37 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// get session upload
+	// get session transfer
 	session := InitSession(r)
-	if session.Values["upload"] == nil {
-		WriteError(w, 401, "Init upload not run")
+	if session.Values[UPLOADSESSIONNAME] == nil {
+		WriteError(w, 401, "Init transfer not run")
 		return
 	}
-	upload := session.Values["upload"].(Upload)
-	if upload.ID == 0 {
-		WriteError(w, 401, "Init upload not run")
+	transfer := session.Values[UPLOADSESSIONNAME].(Transfer)
+	if transfer.ID == 0 {
+		WriteError(w, 401, "Init transfer not run")
 		return
 	}
-	session.Values["upload"] = nil
+	session.Values[UPLOADSESSIONNAME] = nil
 	err = session.Save(r, w)
 	Handle(err)
 
 	// get encrypted with friends public key password
-	upload.password = r.Form.Get("password")
+	transfer.password = r.Form.Get("password")
 
 	// get file from form
 	file, handler, err := r.FormFile("file")
 	defer file.Close()
 	Handle(err)
 
-	// verify init upload against actual file Size
+	// verify init transfer against actual file Size
 	// should be less than expected as it is compressed
-	if int(handler.Size) > upload.Size {
-		m := fmt.Sprintf("You lied about the upload Size expected %v got %v!", upload.Size, int(handler.Size))
+	if int(handler.Size) > transfer.Size {
+		m := fmt.Sprintf("You lied about the transfer Size expected %v got %v!", transfer.Size, int(handler.Size))
 		WriteError(w, 401, m)
 		return
 	}
-	upload.Size = int(handler.Size)
+	transfer.Size = int(handler.Size)
 
 	// get file bytes
 	fileBytes, err := ioutil.ReadAll(file)
@@ -394,16 +398,16 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	err = ioutil.WriteFile(fileLocation, fileBytes, 0744)
 	Handle(err)
 
-	upload.hash = hex.EncodeToString(hasher.Sum(nil))
-	upload.FilePath = strings.Replace(fileLocation, FILEDIR, "", -1)
-	upload.expiry = time.Now().Add(time.Minute * time.Duration(upload.from.WantedMins))
+	transfer.hash = hex.EncodeToString(hasher.Sum(nil))
+	transfer.FilePath = strings.Replace(fileLocation, FILEDIR, "", -1)
+	transfer.expiry = time.Now().Add(time.Minute * time.Duration(transfer.from.WantedMins))
 
-	err = UpdateUpload(s.db, upload)
+	err = UpdateTransfer(s.db, transfer)
 	Handle(err)
 
 	SendSocketMessage(SocketMessage{
-		Download: &upload,
-	}, upload.to.UUID, true)
+		Download: &transfer,
+	}, transfer.to.UUID, true)
 }
 
 func (s *Server) DownloadHandler(w http.ResponseWriter, r *http.Request) {
@@ -470,23 +474,23 @@ func (s *Server) CompletedDownloadHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var upload = Upload{
+	var transfer = Transfer{
 		to:       User{UUID: user.UUID},
 		FilePath: r.Form.Get("file_path"),
 		hash:     r.Form.Get("hash"),
 	}
 
 	failed := true
-	if upload.hash != "" {
+	if transfer.hash != "" {
 		failed = false
-		password, fromUUID := GetUploadPasswordAndUUID(s.db, upload)
+		password, fromUUID := GetTransferPasswordAndUUID(s.db, transfer)
 		if password == "" || fromUUID == "" {
-			log.Println("No password for user. Or already uploading to user", upload)
+			log.Println("No password for user. Or already uploading to user", transfer)
 			http.Error(w, "No password for user", 402)
 		} else {
-			upload.from.UUID = fromUUID
+			transfer.from.UUID = fromUUID
 
-			// send message to user
+			// send user stats update to sender
 			go func() {
 				from := User{UUID: fromUUID}
 				SetUserStats(s.db, &from)
@@ -499,5 +503,5 @@ func (s *Server) CompletedDownloadHandler(w http.ResponseWriter, r *http.Request
 		Handle(err)
 	}
 
-	go CompleteUpload(s.db, upload, failed, false)
+	go CompleteTransfer(s.db, transfer, failed, false)
 }

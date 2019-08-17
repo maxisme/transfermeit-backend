@@ -43,7 +43,7 @@ create table credit
 create index UUID
     on credit (UUID);
 
-create table upload
+create table transfer
 (
     id int auto_increment
         primary key,
@@ -59,15 +59,15 @@ create table upload
     password text null,
     constraint path
         unique (file_path),
-    constraint upload_ibfk_1
+    constraint transfer_ibfk_1
         foreign key (from_UUID) references user (UUID),
-    constraint upload_ibfk_2
+    constraint transfer_ibfk_2
         foreign key (to_UUID) references user (UUID)
 );
 
 create index fromID
-    on upload (from_UUID);
+    on transfer (from_UUID);
 
 create index toID
-    on upload (to_UUID);
+    on transfer (to_UUID);
 

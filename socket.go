@@ -13,7 +13,7 @@ type DesktopMessage struct {
 
 type SocketMessage struct {
 	User     *User           `json:"user"`
-	Download *Upload         `json:"download"`
+	Download *Transfer       `json:"download"`
 	Message  *DesktopMessage `json:"message"`
 }
 
@@ -44,12 +44,21 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// CONNECT TO SOCKET
+	// connect to socket
 	wsconn, _ := upgrader.Upgrade(w, r, nil)
-	clients[Hash(user.UUID)] = wsconn // add conn to clients
+	// add conn to clients
+	clientsMutex.Lock()
+	clients[Hash(user.UUID)] = wsconn
+	clientsMutex.Unlock()
 	go UserSocketConnected(s.db, user, true)
 
-	// SEND ALL PENDING MESSAGES
+	// send user info
+	SetUserStats(s.db, &user)
+	SendSocketMessage(SocketMessage{
+		User: &user,
+	}, user.UUID, true)
+
+	// send all pending messages
 	if messages, ok := pendingSocketMessages[Hash(user.UUID)]; ok {
 		for _, message := range messages {
 			SendSocketMessage(message, Hash(user.UUID), false)
@@ -57,7 +66,7 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 		delete(pendingSocketMessages, Hash(user.UUID)) // delete pending messages
 	}
 
-	// INCOMING SOCKET MESSAGES
+	// incoming socket messages
 	for {
 		_, message, err := wsconn.ReadMessage()
 		if err != nil {
@@ -68,10 +77,10 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 		var mess IncomingSocketMessage
 		Handle(json.Unmarshal(message, &mess))
 		if mess.Type == "keep-alive" {
-			Handle(KeepAliveUpload(s.db, user, mess.Content))
+			Handle(KeepAliveTransfer(s.db, user, mess.Content))
 		} else if mess.Type == "stats" {
 			SetUserStats(s.db, &user)
-			go SendSocketMessage(SocketMessage{
+			SendSocketMessage(SocketMessage{
 				User: &user,
 			}, user.UUID, true)
 		}
@@ -79,5 +88,9 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go UserSocketConnected(s.db, user, false)
+
+	// remove client from clients
+	clientsMutex.Lock()
 	delete(clients, user.UUID)
+	clientsMutex.Unlock()
 }

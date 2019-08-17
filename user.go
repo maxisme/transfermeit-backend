@@ -126,15 +126,10 @@ func HasUUID(db *sql.DB, user User) bool {
 }
 
 func GetUserUsedBandwidth(db *sql.DB, user User) (bytes int) {
-	extra := ``
-	if user.Tier > FREEUSER {
-		extra = `
-		AND DATE(finished_ddtm) = CURDATE()
-		AND pro = 0`
-	}
 	result := db.QueryRow(`SELECT SUM(size) as used_bandwidth
-	FROM upload
-	WHERE from_UUID = ? `+extra, Hash(user.UUID))
+	FROM transfer
+	WHERE from_UUID = ? 
+	AND DATE(finished_dttm) = CURDATE()`, Hash(user.UUID))
 	err := result.Scan(&bytes)
 	if err != nil {
 		bytes = 0
