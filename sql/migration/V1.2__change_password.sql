@@ -1,1 +1,0 @@
-alter table transfer modify password TEXT null;
