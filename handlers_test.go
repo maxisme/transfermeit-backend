@@ -186,7 +186,7 @@ func TestUploadDownloadCycle(t *testing.T) {
 		t.Errorf("Got %v expected %v", rr2.Body.String(), password)
 	}
 
-	if _, err := os.Stat(FILEDIR + filePath); err != nil {
+	if _, err := os.Stat(FILEDIR + filePath); err == nil {
 		t.Errorf("'%v' should have been deleted", FILEDIR+filePath)
 	}
 
