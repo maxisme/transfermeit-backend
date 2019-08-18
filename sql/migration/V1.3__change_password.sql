@@ -1,0 +1,1 @@
+alter table transfer modify password varchar(1000) null;
