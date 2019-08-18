@@ -151,6 +151,7 @@ func DeleteUploadDir(filePath string) bool {
 func (s *Server) CleanIncompleteTransfers() {
 	log.Println("STARTED TRANSFER CLEANUP")
 
+	// find and remove all expired uploads
 	rows, err := s.db.Query(`
 	SELECT id, file_path, to_UUID, from_UUID
 	FROM transfer
@@ -165,7 +166,7 @@ func (s *Server) CleanIncompleteTransfers() {
 		var transfer Transfer
 		err := rows.Scan(&transfer.ID, &transfer.FilePath, &transfer.to.UUID, &transfer.from.UUID)
 		Handle(err)
-		go CompleteTransfer(s.db, transfer, true, true)
+		CompleteTransfer(s.db, transfer, true, true)
 		cnt += 1
 	}
 

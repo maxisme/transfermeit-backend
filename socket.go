@@ -65,6 +65,7 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	messages, ok := pendingSocketMessages[Hash(user.UUID)]
 	pendingSocketMutex.RUnlock()
 	if ok {
+		// send pending messages
 		for _, message := range messages {
 			SendSocketMessage(message, Hash(user.UUID), false)
 		}
