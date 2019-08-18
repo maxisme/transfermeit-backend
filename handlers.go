@@ -469,15 +469,6 @@ func (s *Server) CompletedDownloadHandler(w http.ResponseWriter, r *http.Request
 			http.Error(w, "No password for user", 402)
 		} else {
 			transfer.from.UUID = fromUUID
-
-			// send user stats update to sender
-			go func() {
-				from := User{UUID: fromUUID}
-				SetUserStats(s.db, &from)
-				SendSocketMessage(SocketMessage{
-					User: &from,
-				}, fromUUID, true)
-			}()
 		}
 		_, err := w.Write([]byte(password))
 		Handle(err)

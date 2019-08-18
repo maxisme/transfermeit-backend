@@ -191,13 +191,13 @@ func TestUploadDownloadCycle(t *testing.T) {
 	}
 
 	message = ReadSocketMessage(user1Ws)
-	if message.Message.Title != "Successful Transfer" {
-		t.Errorf("expected: %v got %v", "Successful Transfer", message.User.Bandwidth)
+	if message.User.Bandwidth != FREEBANDWIDTH-fileSize {
+		t.Errorf("expected %v got %v", FREEBANDWIDTH-fileSize, message.User.Bandwidth)
 	}
 
 	message = ReadSocketMessage(user1Ws)
-	if message.User.Bandwidth != FREEBANDWIDTH-fileSize {
-		t.Errorf("expected %v got %v", FREEBANDWIDTH-fileSize, message.User.Bandwidth)
+	if message.Message.Title != "Successful Transfer" {
+		t.Errorf("expected: %v got %v", "Successful Transfer", message.User.Bandwidth)
 	}
 }
 

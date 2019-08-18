@@ -115,19 +115,26 @@ func CompleteTransfer(db *sql.DB, transfer Transfer, failed bool, expired bool) 
 
 	go DeleteUploadDir(transfer.FilePath)
 
-	mess := DesktopMessage{
-		Title:   "Successful Transfer",
-		Message: "Your friend successfully downloaded the file!",
-	}
+	message := DesktopMessage{}
 	if expired {
-		mess.Title = "Expired Transfer!"
-		mess.Message = "The file you uploaded has expired."
+		message.Title = "Expired Transfer!"
+		message.Message = "Your file was not downloaded in time!"
 	} else if failed {
-		mess.Title = "Unsuccessful Transfer"
-		mess.Message = "Your friend may have ignored the download!"
+		message.Title = "Unsuccessful Transfer"
+		message.Message = "Your friend may have ignored the transfer!"
+	} else {
+		message.Title = "Successful Transfer"
+		message.Message = "Your friend has received your file!"
+
+		// send user stats update to sender
+		from := User{UUID: transfer.from.UUID}
+		SetUserStats(db, &from)
+		SendSocketMessage(SocketMessage{
+			User: &from,
+		}, transfer.from.UUID, true)
 	}
 
-	SendSocketMessage(SocketMessage{Message: &mess}, transfer.from.UUID, true)
+	SendSocketMessage(SocketMessage{Message: &message}, transfer.from.UUID, true)
 }
 
 // remove uploaded directory
