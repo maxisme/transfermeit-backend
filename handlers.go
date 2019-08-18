@@ -474,5 +474,5 @@ func (s *Server) CompletedDownloadHandler(w http.ResponseWriter, r *http.Request
 		Handle(err)
 	}
 
-	go CompleteTransfer(s.db, transfer, failed, false)
+	CompleteTransfer(s.db, transfer, failed, false)
 }
