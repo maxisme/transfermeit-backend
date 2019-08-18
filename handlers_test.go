@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"io"
@@ -124,6 +125,10 @@ func TestUploadDownloadCycle(t *testing.T) {
 	user1, form1 := GenUser()
 	user2, form2 := GenUser()
 
+	_, _, user1Ws, _ := ConnectWSS(user1, form1)
+	defer user1Ws.Close()
+	_ = ReadSocketMessage(user1Ws) // returns user stats when first connected so ignore this incoming message
+
 	// UPLOAD
 
 	// create a file
@@ -187,10 +192,8 @@ func TestUploadDownloadCycle(t *testing.T) {
 		t.Errorf("'%v' should have been deleted", FILEDIR+filePath)
 	}
 
-	_, _, user1Ws, _ := ConnectWSS(user1, form1)
-	_ = ReadSocketMessage(user1Ws) // returns user stats when first connected so ignore this incoming message
-
 	message = ReadSocketMessage(user1Ws)
+	fmt.Printf("%v", message)
 	if message.Message.Title != "Successful Transfer" {
 		t.Errorf("expected: %v got %v", "Successful Transfer", message.User.Bandwidth)
 	}
