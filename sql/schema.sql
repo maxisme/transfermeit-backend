@@ -56,7 +56,7 @@ create table transfer
     finished_dttm timestamp null,
     failed tinyint(1) default 0 not null,
     file_hash varchar(128) null,
-    password varchar(500) null,
+    password TEXT null,
     constraint path
         unique (file_path),
     constraint transfer_ibfk_1
