@@ -126,7 +126,6 @@ func TestUploadDownloadCycle(t *testing.T) {
 	user2, form2 := GenUser()
 
 	_, _, user1Ws, _ := ConnectWSS(user1, form1)
-	defer user1Ws.Close()
 	_ = ReadSocketMessage(user1Ws) // returns user stats when first connected so ignore this incoming message
 
 	// UPLOAD
@@ -193,6 +192,9 @@ func TestUploadDownloadCycle(t *testing.T) {
 	}
 
 	message = ReadSocketMessage(user1Ws)
+	for message.User != nil {
+		message = ReadSocketMessage(user1Ws)
+	}
 	fmt.Printf("%v", message)
 	if message.Message.Title != "Successful Transfer" {
 		t.Errorf("expected: %v got %v", "Successful Transfer", message.User.Bandwidth)
