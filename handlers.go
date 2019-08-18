@@ -69,7 +69,7 @@ func (s *Server) TogglePermCodeHandler(w http.ResponseWriter, r *http.Request) {
 			// turn on random perm code
 			user.Code = GenUserCode(s.db)
 			if err := SetPermCode(s.db, user); err != nil {
-				log.Println(err.Error())
+				Handle(err)
 				WriteError(w, 401, "Failed to set permanent code")
 				return
 			}
@@ -115,7 +115,7 @@ func (s *Server) CustomCodeHandler(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write(jsonReply)
 			return
 		} else {
-			log.Println(err.Error())
+			Handle(err)
 		}
 	}
 	WriteError(w, 402, "Failed to set activation code")
@@ -129,7 +129,6 @@ func (s *Server) RegisterCreditHandler(w http.ResponseWriter, r *http.Request) {
 
 	// fetch form
 	if err := r.ParseForm(); err != nil {
-		log.Println(err.Error())
 		WriteError(w, 400, "Invalid form data")
 		return
 	}
@@ -248,7 +247,7 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	filesize, err := strconv.Atoi(r.Form.Get("filesize"))
 	if err != nil {
-		log.Println(err.Error())
+		Handle(err)
 		WriteError(w, 401, "Invalid value for filesize")
 		return
 	}

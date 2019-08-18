@@ -127,7 +127,9 @@ func SendSocketMessage(message SocketMessage, UUID string, storeOnFail bool) boo
 	}
 
 	if storeOnFail {
+		pendingSocketMutex.Lock()
 		pendingSocketMessages[hashUUID] = append(pendingSocketMessages[hashUUID], message)
+		pendingSocketMutex.Unlock()
 	}
 
 	return false

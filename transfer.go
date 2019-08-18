@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -17,8 +18,10 @@ var (
 	FREEBANDWIDTH  = FREEFILEUPLOAD * 10
 	CREDITSTEPS    = 0.5
 )
-var pendingSocketMessages = map[string][]SocketMessage{}
-
+var (
+	pendingSocketMessages = map[string][]SocketMessage{}
+	pendingSocketMutex    = sync.RWMutex{}
+)
 var USERDIRLEN = 50
 var FILEDIR = os.Getenv("file_dir")
 

@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 )
 
@@ -46,10 +45,13 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 
 	// connect to socket
 	wsconn, _ := upgrader.Upgrade(w, r, nil)
-	// add conn to clients
+
+	// add web socket connection to list of clients
 	clientsMutex.Lock()
 	clients[Hash(user.UUID)] = wsconn
 	clientsMutex.Unlock()
+
+	// mark user as connected in db
 	go UserSocketConnected(s.db, user, true)
 
 	// send user info
@@ -58,19 +60,26 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 		User: &user,
 	}, user.UUID, true)
 
-	// send all pending messages
-	if messages, ok := pendingSocketMessages[Hash(user.UUID)]; ok {
+	// get pending messages
+	pendingSocketMutex.RLock()
+	messages, ok := pendingSocketMessages[Hash(user.UUID)]
+	pendingSocketMutex.RUnlock()
+	if ok {
 		for _, message := range messages {
 			SendSocketMessage(message, Hash(user.UUID), false)
 		}
-		delete(pendingSocketMessages, Hash(user.UUID)) // delete pending messages
+
+		// delete pending messages
+		pendingSocketMutex.Lock()
+		delete(pendingSocketMessages, Hash(user.UUID))
+		pendingSocketMutex.Unlock()
 	}
 
 	// incoming socket messages
 	for {
 		_, message, err := wsconn.ReadMessage()
 		if err != nil {
-			log.Println(err.Error())
+			Handle(err)
 			break
 		}
 

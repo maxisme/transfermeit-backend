@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"io"
@@ -125,9 +124,6 @@ func TestUploadDownloadCycle(t *testing.T) {
 	user1, form1 := GenUser()
 	user2, form2 := GenUser()
 
-	_, _, user1Ws, _ := ConnectWSS(user1, form1)
-	_ = ReadSocketMessage(user1Ws) // returns user when first connected so ignore this incoming message
-
 	// UPLOAD
 
 	// create a file
@@ -158,9 +154,8 @@ func TestUploadDownloadCycle(t *testing.T) {
 
 	// fetch stored file path notification on Server that were sent when not connected
 	_, _, user2Ws, _ := ConnectWSS(user2, form2)
-	_ = ReadSocketMessage(user2Ws) // returns user when first connected so ignore this incoming message
+	_ = ReadSocketMessage(user2Ws) // returns user stats when first connected so ignore this incoming message
 	message := ReadSocketMessage(user2Ws)
-	fmt.Printf("%v", message)
 	filePath := message.Download.FilePath
 	if len(path.Dir(filePath)) != USERDIRLEN {
 		t.Fatalf(filePath)
@@ -191,6 +186,9 @@ func TestUploadDownloadCycle(t *testing.T) {
 	if _, err := os.Stat(FILEDIR + filePath); err != nil {
 		t.Errorf("'%v' should have been deleted", FILEDIR+filePath)
 	}
+
+	_, _, user1Ws, _ := ConnectWSS(user1, form1)
+	_ = ReadSocketMessage(user1Ws) // returns user stats when first connected so ignore this incoming message
 
 	message = ReadSocketMessage(user1Ws)
 	if message.Message.Title != "Successful Transfer" {
