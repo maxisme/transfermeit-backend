@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"io"
@@ -192,13 +191,11 @@ func TestUploadDownloadCycle(t *testing.T) {
 	}
 
 	message = ReadSocketMessage(user1Ws)
-	fmt.Printf("%v", message.User)
-	fmt.Printf("%v", message.Download)
-	fmt.Printf("%v", message.Message)
-	//if message.Message.Title != "Successful Transfer" {
-	//	t.Errorf("expected: %v got %v", "Successful Transfer", message.User.Bandwidth)
-	//}
-	//message = ReadSocketMessage(user1Ws)
+	if message.Message.Title != "Successful Transfer" {
+		t.Errorf("expected: %v got %v", "Successful Transfer", message.User.Bandwidth)
+	}
+
+	message = ReadSocketMessage(user1Ws)
 	if message.User.Bandwidth != FREEBANDWIDTH-fileSize {
 		t.Errorf("expected %v got %v", FREEBANDWIDTH-fileSize, message.User.Bandwidth)
 	}
