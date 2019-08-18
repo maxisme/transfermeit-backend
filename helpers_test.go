@@ -66,6 +66,7 @@ func GenUser() (user User, form url.Values) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &user); err != nil {
 		log.Fatal(err)
 	}
+	time.Sleep(time.Millisecond * time.Duration(10))
 	return
 }
 

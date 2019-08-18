@@ -70,7 +70,6 @@ func TestCredentialHandler(t *testing.T) {
 
 func TestWSHandler(t *testing.T) {
 	user, form := GenUser()
-	time.Sleep(time.Millisecond * time.Duration(100))
 
 	wsheader := http.Header{}
 	var headers = []struct {
@@ -189,8 +188,8 @@ func TestUploadDownloadCycle(t *testing.T) {
 		t.Errorf("Got %v expected %v", rr2.Body.String(), password)
 	}
 
-	if _, err := os.Stat(filePath); !os.IsNotExist(err) {
-		t.Errorf("'%v' should have been deleted", filePath)
+	if _, err := os.Stat(FILEDIR + filePath); err != nil {
+		t.Errorf("'%v' should have been deleted", FILEDIR+filePath)
 	}
 
 	message = ReadSocketMessage(user1Ws)
