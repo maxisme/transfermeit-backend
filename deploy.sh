@@ -15,11 +15,11 @@ then
     git checkout master
     git pull origin master
 
-    # update server
-    docker-compose up --build -d
-
     # run db migrations
     docker-compose up flyway
+
+    # update server
+    docker-compose up --build -d
 
     # kill all unused dockers
     docker system prune -f
