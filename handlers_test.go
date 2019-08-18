@@ -125,7 +125,6 @@ func TestUploadDownloadCycle(t *testing.T) {
 	user2, form2 := GenUser()
 
 	_, _, user1Ws, _ := ConnectWSS(user1, form1)
-	_ = ReadSocketMessage(user1Ws) // returns user stats when first connected so ignore this incoming message
 
 	// UPLOAD
 
@@ -157,7 +156,6 @@ func TestUploadDownloadCycle(t *testing.T) {
 
 	// fetch stored file path notification on Server that were sent when not connected
 	_, _, user2Ws, _ := ConnectWSS(user2, form2)
-	_ = ReadSocketMessage(user2Ws) // returns user stats when first connected so ignore this incoming message
 	message := ReadSocketMessage(user2Ws)
 	filePath := message.Download.FilePath
 	if len(path.Dir(filePath)) != USERDIRLEN {
@@ -208,13 +206,17 @@ func TestCodeTimeout(t *testing.T) {
 	time.Sleep(time.Second * time.Duration(secondHang))
 
 	_, _, ws, _ := ConnectWSS(user, form)
-	_ = ws.WriteMessage(websocket.TextMessage, []byte(user.Code))
+
+	// send stats socket message to acquire user info
+	socketMessage, _ := json.Marshal(IncomingSocketMessage{Type: "stats"})
+	_ = ws.WriteMessage(websocket.TextMessage, socketMessage)
+
 	message := ReadSocketMessage(ws)
 
-	secondsLeft := math.Ceil(message.User.EndTime.Sub(time.Now()).Seconds())
+	secondsLeft := math.Floor(message.User.EndTime.Sub(time.Now()).Seconds())
 	estimatedSecondsLeft := DEFAULTMIN*60 - secondHang
 
-	if estimatedSecondsLeft != int(secondsLeft) && estimatedSecondsLeft != int(secondsLeft-1) {
+	if estimatedSecondsLeft != int(secondsLeft) && estimatedSecondsLeft-1 != int(secondsLeft) {
 		t.Errorf("Got %v expected %v", secondsLeft, estimatedSecondsLeft)
 	}
 }

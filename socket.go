@@ -54,12 +54,6 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	// mark user as connected in db
 	go UserSocketConnected(s.db, user, true)
 
-	// send user info
-	SetUserStats(s.db, &user)
-	SendSocketMessage(SocketMessage{
-		User: &user,
-	}, user.UUID, true)
-
 	// get pending messages
 	pendingSocketMutex.RLock()
 	messages, ok := pendingSocketMessages[Hash(user.UUID)]

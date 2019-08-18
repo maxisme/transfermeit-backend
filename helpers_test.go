@@ -106,7 +106,7 @@ func ConnectWSSHeader(wsheader http.Header) (*httptest.Server, *http.Response, *
 	Handle(err)
 	if err == nil {
 		// add ws read timeout
-		_ = ws.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+		_ = ws.SetReadDeadline(time.Now().Add(1000 * time.Millisecond))
 	}
 	return server, res, ws, err
 }

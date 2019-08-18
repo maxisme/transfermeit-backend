@@ -162,6 +162,7 @@ func (s *Server) CredentialHandler(w http.ResponseWriter, r *http.Request) {
 
 	// fetch form
 	if err := r.ParseForm(); err != nil {
+		Handle(err)
 		WriteError(w, 400, "Invalid form data")
 		return
 	}
