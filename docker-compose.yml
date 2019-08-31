@@ -9,7 +9,7 @@ services:
       MYSQL_PASSWORD: transfermeit
     container_name: transfermeit-backend-db
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     tty: true
     volumes:
       - ./sql:/docker-entrypoint-initdb.d/:ro
@@ -28,7 +28,7 @@ services:
       file_dir: ${file_dir:-/var/tmp/transfermeit/}
     tty: true
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     depends_on:
       - db
 
