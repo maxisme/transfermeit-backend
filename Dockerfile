@@ -16,5 +16,5 @@ RUN mkdir /app
 ADD . /app/
 WORKDIR /app
 RUN go build -o transfermeit .
-RUN go clean -modcache
+RUN chmod 777 -R /go/pkg/mod/*
 CMD ["/app/transfermeit"]
