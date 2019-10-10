@@ -50,7 +50,7 @@ func main() {
 
 	// clean up cron
 	c := cron.New()
-	_, err = c.AddFunc("@every 1m", s.CleanIncompleteTransfers)
+	err = c.AddFunc("@every 1m", s.CleanIncompleteTransfers)
 	if err != nil {
 		log.Fatal(err)
 	}

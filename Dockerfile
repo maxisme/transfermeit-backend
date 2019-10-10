@@ -13,22 +13,6 @@ RUN apk add git
 RUN apk add gcc
 RUN apk add libc-dev
 
-RUN go get -u github.com/gorilla/schema
-RUN go get -u github.com/gorilla/websocket
-RUN go get -u github.com/gorilla/sessions
-RUN go get -u github.com/google/uuid
-RUN go get -u github.com/getsentry/sentry-go
-RUN go get -u github.com/go-sql-driver/mysql
-RUN go get -u github.com/didip/tollbooth
-RUN go get -u github.com/didip/tollbooth/limiter
-RUN go get -u gopkg.in/tylerb/graceful.v1
-RUN go get -u github.com/satori/go.uuid
-RUN go get -u golang.org/x/crypto/bcrypt
-RUN go get -u github.com/robfig/cron
-RUN go get -u github.com/Pallinder/go-randomdata
-RUN go get -u github.com/TV4/graceful
-RUN go get -u github.com/patrickmn/go-cache
-
 RUN mkdir /app
 ADD . /app/
 WORKDIR /app
