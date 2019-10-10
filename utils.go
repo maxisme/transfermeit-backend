@@ -94,19 +94,6 @@ func WriteError(w http.ResponseWriter, code int, message string) {
 	Handle(err)
 }
 
-// calculate the Size of a file after is has been encrypted with aes on the client side with RNCryptor
-func FileSizeToRNCryptorBytes(bytes int) int {
-	overhead := 66
-	if bytes == 0 {
-		return overhead + 16
-	}
-	remainder := bytes % 16
-	if remainder == 0 {
-		return bytes + 16 + overhead
-	}
-	return bytes + 16 + overhead - remainder
-}
-
 func SendSocketMessage(message SocketMessage, UUID string, storeOnFail bool) bool {
 	hashUUID := Hash(UUID)
 	clientsMutex.RLock()
