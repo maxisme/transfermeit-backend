@@ -128,7 +128,7 @@ func CompleteTransfer(db *sql.DB, transfer Transfer, failed bool, expired bool) 
 
 		// send user stats update to sender
 		from := User{UUID: transfer.from.UUID}
-		SetUserStats(db, &from)
+		SetUsersStats(db, &from)
 		SendSocketMessage(SocketMessage{
 			User: &from,
 		}, transfer.from.UUID, true)

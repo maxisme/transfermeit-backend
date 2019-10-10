@@ -167,15 +167,15 @@ func (s *Server) CredentialHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Form.Get("UUID") == "" {
-		WriteError(w, 400, "Invalid form data")
-		return
-	}
-
 	user := User{}
 	user.UUID = r.Form.Get("UUID")
 	user.UUIDKey = r.Form.Get("UUID_key")
 	user.PublicKey = r.Form.Get("public_key")
+
+	if user.UUID == "" {
+		WriteError(w, 400, "Invalid form data")
+		return
+	}
 
 	if user.PublicKey == "" {
 		WriteError(w, 401, "Invalid form data")
@@ -193,30 +193,37 @@ func (s *Server) CredentialHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user.Code = GenUserCode(s.db)
+	UUIDKey, userExists := GetUUIDKey(s.db, user)
 
-	if !IsValidUserCredentials(s.db, user) {
-		// creating new user account
-		if HasUUID(s.db, user) {
-			WriteError(w, 402, "Invalid UUID key")
-			return
-		} else {
-			log.Println("Creating new user " + user.UUID)
-			// create new tmi user
-			user.UUIDKey = RandomString(UUIDKEYLEN)
-			user.MaxFileSize = FREEFILEUPLOAD
-			user.Bandwidth = FREEBANDWIDTH
-			user.MinsAllowed = DEFAULTMIN
-			user.WantedMins = DEFAULTMIN
-			user.EndTime = time.Now().Add(time.Minute * time.Duration(wantedMins)).UTC()
-			go CreateNewUser(s.db, user)
-		}
+	if userExists && len(UUIDKey) > 0 && !IsValidUserCredentials(s.db, user) {
+		WriteError(w, 402, "Invalid UUID key")
+		return
+	} else if !userExists {
+		log.Println("Creating new user " + user.UUID)
+		// create new tmi user
+		user.UUIDKey = RandomString(UUIDKEYLEN)
+		user.MaxFileSize = FREEFILEUPLOAD
+		user.Bandwidth = FREEBANDWIDTH
+		user.MinsAllowed = DEFAULTMIN
+		user.WantedMins = DEFAULTMIN
+		user.EndTime = time.Now().Add(time.Minute * time.Duration(wantedMins)).UTC()
+		go CreateNewUser(s.db, user)
 	} else {
-		// creating new code for user
-		expectedPermCode := r.Form.Get("perm_user_code")
-		if expectedPermCode != "" {
-			SetUsersPermCode(s.db, &user, r.Form.Get("perm_user_code"))
+		if len(UUIDKey) == 0 {
+			// if key has been removed from db because of lost UUID key from client
+			user.UUIDKey = RandomString(UUIDKEYLEN)
+			log.Println("Resetting UUID key for " + user.UUID)
+		} else {
+			user.UUIDKey = ""
 		}
-		SetUserStats(s.db, &user)
+
+		// set perm code at client request
+		expectedPermCode := r.Form.Get("perm_user_code")
+		if len(expectedPermCode) != 0 {
+			SetUsersPermCode(s.db, &user, expectedPermCode)
+		}
+
+		SetUsersStats(s.db, &user)
 
 		if wantedMins > user.MinsAllowed {
 			wantedMins = DEFAULTMIN
@@ -224,7 +231,6 @@ func (s *Server) CredentialHandler(w http.ResponseWriter, r *http.Request) {
 		user.WantedMins = wantedMins
 
 		user.EndTime = time.Now().Add(time.Minute * time.Duration(wantedMins)).UTC()
-		user.UUIDKey = ""
 		go UpdateUser(s.db, user)
 	}
 

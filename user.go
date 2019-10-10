@@ -49,11 +49,11 @@ func CreateNewUser(db *sql.DB, user User) {
 	Handle(err)
 }
 
-func UpdateUser(db *sql.DB, user User) error {
-	return UpdateErr(db.Exec(`
+func UpdateUser(db *sql.DB, user User) {
+	Handle(UpdateErr(db.Exec(`
 	UPDATE user 
 	SET code = ?, public_key = ?, wanted_mins = ?, code_end_dttm = ?
-	WHERE UUID=?`, user.Code, user.PublicKey, user.WantedMins, user.EndTime, Hash(user.UUID)))
+	WHERE UUID=?`, user.Code, user.PublicKey, user.WantedMins, user.EndTime, Hash(user.UUID))))
 }
 
 func SetUsersTier(db *sql.DB, user *User) {
@@ -85,8 +85,8 @@ func DeleteCode(db *sql.DB, user User) error {
 	WHERE UUID = ? AND UUID_key = ?`, user.UUID, user.UUIDKey))
 }
 
-func SetUserStats(db *sql.DB, user *User) {
-	// get user time left
+func SetUsersStats(db *sql.DB, user *User) {
+	// get code time left
 	SetUserCodeEndTime(db, user)
 	if user.EndTime.Sub(time.Now()) <= 0 {
 		// user has expired
@@ -110,17 +110,19 @@ func UserSocketConnected(db *sql.DB, user User, connected bool) {
 	WHERE UUID = ? AND UUID_key = ?`, isConnected, Hash(user.UUID), Hash(user.UUIDKey))))
 }
 
-func HasUUID(db *sql.DB, user User) bool {
+func GetUUIDKey(db *sql.DB, user User) (string, bool) {
 	var id int
+	var key string
+
 	result := db.QueryRow(`
-	SELECT id
+	SELECT UUID_key, id
 		FROM user
 	WHERE UUID = ?`, Hash(user.UUID))
-	err := result.Scan(&id)
+	err := result.Scan(&key, &id)
 	if err == nil && id > 0 {
-		return true
+		return key, true
 	}
-	return false
+	return key, false
 }
 
 func GetUserUsedBandwidth(db *sql.DB, user User) (bytes int) {
@@ -179,11 +181,6 @@ func IsValidUserCredentials(db *sql.DB, user User) bool {
 		err := result.Scan(&id)
 		if err == nil && id > 0 {
 			return true
-		} else {
-			log.Println(user.UUID)
-			log.Println(Hash(user.UUID))
-			log.Println(user.UUIDKey)
-			log.Println(Hash(user.UUIDKey))
 		}
 	}
 	return false

@@ -222,7 +222,6 @@ func TestCodeTimeout(t *testing.T) {
 }
 
 func TestPermCode(t *testing.T) {
-	var user User
 	_, form := GenCreditUser(PERMCRED)
 
 	// toggle on perm code
@@ -230,30 +229,48 @@ func TestPermCode(t *testing.T) {
 	if rr.Code != 200 {
 		t.Errorf("Got %v expected %v", rr.Body.String(), 200)
 	}
+	var user User
 	_ = json.Unmarshal(rr.Body.Bytes(), &user)
-	var codeComp = user.Code
+	var permCode = user.Code
 
 	// test that if client does not pass perm_user_code it sets a new code
 	rr = PostRequest(form, http.HandlerFunc(s.CredentialHandler))
 	_ = json.Unmarshal(rr.Body.Bytes(), &user)
-	if codeComp == user.Code {
+	if permCode == user.Code {
 		t.Errorf("Should have given a new random code as perm_user_code was not passed!")
 	}
 
 	// request new code
-	form.Set("perm_user_code", codeComp)
+	form.Set("perm_user_code", permCode)
 	rr = PostRequest(form, http.HandlerFunc(s.CredentialHandler))
 	_ = json.Unmarshal(rr.Body.Bytes(), &user)
-	if codeComp != user.Code {
-		t.Errorf("Should have kept same code '%v' instead of returning '%v'", codeComp, user.Code)
+	if permCode != user.Code {
+		t.Errorf("Should have kept same code '%v' instead of returning '%v' %v", permCode, user.Code, rr.Code)
 	}
-	codeComp = user.Code
+	permCode = user.Code
 
 	// toggle off perm code
 	rr = PostRequest(form, http.HandlerFunc(s.TogglePermCodeHandler))
 	_ = json.Unmarshal(rr.Body.Bytes(), &user)
-	if codeComp == user.Code {
-		t.Errorf("Should have changed code %v vs %v", codeComp, user.Code)
+	if permCode == user.Code {
+		t.Errorf("Should have changed code %v vs %v", permCode, user.Code)
+	}
+}
+
+func TestUUIDReset(t *testing.T) {
+	_, form := GenUser()
+
+	RemoveUUIDKey(form)
+
+	rr := PostRequest(form, http.HandlerFunc(s.CredentialHandler))
+	if rr.Code != 200 {
+		t.Errorf("Got %v (%v) expected %v", rr.Code, rr.Body, 200)
+	}
+	// parse user
+	var u User
+	_ = json.Unmarshal(rr.Body.Bytes(), &u)
+	if len(u.UUIDKey) == 0 {
+		t.Errorf("Expected a UUID Key.")
 	}
 }
 

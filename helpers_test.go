@@ -118,3 +118,11 @@ func GenerateProCredit(activationCode string, credit float64) {
 	`, activationCode, credit, randomdata.Email())
 	Handle(err)
 }
+
+func RemoveUUIDKey(form url.Values) {
+	Handle(UpdateErr(s.db.Exec(`
+	UPDATE user 
+	SET UUID_key=''
+	WHERE UUID = ?
+	`, Hash(form.Get("UUID")))))
+}
