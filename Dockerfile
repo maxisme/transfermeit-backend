@@ -5,7 +5,6 @@ USER root
 ENV GOROOT /usr/local/go
 ENV PATH $PATH:$GOROOT/bin
 
-RUN mkdir /.cache && chmod 777 /.cache
 RUN apk update
 RUN apk upgrade
 RUN apk add git
@@ -16,4 +15,5 @@ RUN mkdir /app
 ADD . /app/
 WORKDIR /app
 RUN go build -o transfermeit .
+RUN chmod 777 -R /go/pkg/*
 CMD ["/app/transfermeit"]
