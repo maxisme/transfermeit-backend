@@ -5,6 +5,7 @@ USER root
 ENV GOROOT /usr/local/go
 ENV PATH $PATH:$GOROOT/bin
 
+RUN mkdir /.cache && chmod 777 /.cache
 RUN apk update
 RUN apk upgrade
 RUN apk add git
