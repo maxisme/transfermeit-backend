@@ -52,8 +52,15 @@ func CreateNewUser(db *sql.DB, user User) {
 func UpdateUser(db *sql.DB, user User) {
 	Handle(UpdateErr(db.Exec(`
 	UPDATE user 
-	SET code = ?, public_key = ?, wanted_mins = ?, code_end_dttm = ?
+	SET code = ?, public_key = ?, wanted_mins = ?, code_end_dttm = ?, UUID_key = ?
 	WHERE UUID=?`, user.Code, user.PublicKey, user.WantedMins, user.EndTime, Hash(user.UUID))))
+}
+
+func SetUserUUIDKey(db *sql.DB, user User) {
+	Handle(UpdateErr(db.Exec(`
+	UPDATE user 
+	SET UUID_key = ?
+	WHERE UUID=?`, Hash(user.UUIDKey), Hash(user.UUID))))
 }
 
 func SetUsersTier(db *sql.DB, user *User) {

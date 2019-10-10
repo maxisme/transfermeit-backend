@@ -211,8 +211,10 @@ func (s *Server) CredentialHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		if len(UUIDKey) == 0 {
 			// if key has been removed from db because of lost UUID key from client
-			user.UUIDKey = RandomString(UUIDKEYLEN)
 			log.Println("Resetting UUID key for " + user.UUID)
+
+			user.UUIDKey = RandomString(UUIDKEYLEN)
+			go SetUserUUIDKey(s.db, user)
 		} else {
 			user.UUIDKey = ""
 		}
