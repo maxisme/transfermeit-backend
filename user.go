@@ -52,7 +52,7 @@ func CreateNewUser(db *sql.DB, user User) {
 func UpdateUser(db *sql.DB, user User) {
 	Handle(UpdateErr(db.Exec(`
 	UPDATE user 
-	SET code = ?, public_key = ?, wanted_mins = ?, code_end_dttm = ?, UUID_key = ?
+	SET code = ?, public_key = ?, wanted_mins = ?, code_end_dttm = ?
 	WHERE UUID=?`, user.Code, user.PublicKey, user.WantedMins, user.EndTime, Hash(user.UUID))))
 }
 
