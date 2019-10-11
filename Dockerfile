@@ -1,5 +1,7 @@
 FROM golang:1.12-alpine
 
+USER root
+
 ENV GOROOT /usr/local/go
 ENV GOPATH $HOME/go
 ENV PATH $PATH:$GOROOT/bin
