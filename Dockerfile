@@ -16,5 +16,6 @@ RUN apk add libc-dev
 RUN mkdir /app
 ADD . /app/
 WORKDIR /app
+RUN chmod 777 -R /go/
 RUN go build -o transfermeit .
 CMD ["/app/transfermeit"]
