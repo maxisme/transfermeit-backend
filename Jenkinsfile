@@ -15,7 +15,7 @@ node() {
             def goImage = docker.build("golang:1.12-alpine")
             goImage.inside("--link ${c.id}:db") {
                 stage('Test'){
-                    sh 'cd $WORKSPACE && session_key=UH9ax500yN4mnTO60WLY2ae943tsqzFw test_db_host="root:root@tcp(db:3306)" db="root:root@tcp(db:3306)/transfermeit_test" go test'
+                    sh 'go clean -modcache && cd $WORKSPACE && session_key=UH9ax500yN4mnTO60WLY2ae943tsqzFw test_db_host="root:root@tcp(db:3306)" db="root:root@tcp(db:3306)/transfermeit_test" go test'
                 }
             }
         }
