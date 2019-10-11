@@ -15,7 +15,6 @@ node() {
             def goImage = docker.build("my-image:latest", ".")
             goImage.inside("--link ${c.id}:db") {
                 stage('Test'){
-                    sh 'whoami'
                     sh 'cd $WORKSPACE && session_key=UH9ax500yN4mnTO60WLY2ae943tsqzFw test_db_host="root:root@tcp(db:3306)" db="root:root@tcp(db:3306)/transfermeit_test" go test'
                 }
             }
