@@ -23,7 +23,9 @@ node() {
             sh 'ssh -o StrictHostKeyChecking=no jenk@sock.transferme.it "sudo /bin/bash /root/transfermeit-backend/deploy.sh"'
         }
         setBuildStatus("Build succeeded", "SUCCESS");
-    } catch (err) {
+    } catch (e) {
+        echo 'Err: ' + e.toString()
+        currentBuild.result = "BROKEN"
         setBuildStatus("Build failed", "FAILURE");
     }
 
