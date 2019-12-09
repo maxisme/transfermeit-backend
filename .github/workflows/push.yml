@@ -1,5 +1,5 @@
+name: Transfer Me It
 on: [push]
-name: Push Event
 jobs:
   test:
     name: Run tests
