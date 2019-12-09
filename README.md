@@ -1,0 +1,1 @@
+[![Build Status](https://github.com/maxisme/transfermeit-backend/workflows/Transfer%20Me%20It/badge.svg)](https://github.com/maxisme/transfermeit-backend/actions)
