@@ -7,5 +7,4 @@ jobs:
     steps:
       - uses: actions/checkout
       - name: Test
-        with:
-          script: go test
+        run: go test
