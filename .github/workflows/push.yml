@@ -5,6 +5,12 @@ jobs:
     name: Run tests
     runs-on: ubuntu-latest
     steps:
+      - name: Setup Database
+      - uses: mirromutth/mysql-action@v1.1
+        with:
+          mysql version: '5.6'
+          mysql database: 'transfermeit_test'
+          mysql root password: 'root'
       - uses: actions/checkout@v1
       - name: Test
-        run: go test
+        run: session_key=UH9ax500yN4mnTO60WLY2ae943tsqzFw test_db_host="root:root@tcp(db:3306)" db="root:root@tcp(db:3306)/transfermeit_test" go test
