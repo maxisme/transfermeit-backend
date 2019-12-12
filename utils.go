@@ -61,7 +61,7 @@ func BytesToMegabytes(bytes int) float64 {
 	return float64(bytes / 1000000)
 }
 
-func CreditToFileUpload(credit float64) (bytes int) {
+func CreditToFileUploadSize(credit float64) (bytes int) {
 	bytes = FREEFILEUPLOAD
 	for {
 		if credit > 0 {

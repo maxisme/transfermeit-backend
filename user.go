@@ -153,7 +153,7 @@ func GetUserBandwidthLeft(db *sql.DB, user *User) int {
 
 func SetUsersMaxFileUpload(db *sql.DB, user *User) {
 	SetUsersCredit(db, user)
-	user.MaxFileSize = CreditToFileUpload(user.Credit)
+	user.MaxFileSize = CreditToFileUploadSize(user.Credit)
 }
 
 func SetUserCodeEndTime(db *sql.DB, user *User) {
