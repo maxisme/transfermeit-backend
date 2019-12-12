@@ -1,5 +1,8 @@
 name: Transfer Me It
-on: [push]
+on:
+  push:
+    branches:
+      - master
 jobs:
   test:
     name: Run tests
