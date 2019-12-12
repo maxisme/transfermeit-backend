@@ -24,6 +24,8 @@ import (
 // applied to every test
 func TestMain(m *testing.M) {
 	InitDB(m)
+
+	// clean up
 	_ = os.Remove("./foo.bar")
 	_ = os.RemoveAll("./upload")
 }
@@ -59,6 +61,7 @@ func TestCredentialHandler(t *testing.T) {
 	if rr.Code != 200 {
 		t.Errorf("Got %v (%v) expected %v", rr.Code, rr.Body, 200)
 	}
+
 	// parse user
 	var user User
 	_ = json.Unmarshal(rr.Body.Bytes(), &user)

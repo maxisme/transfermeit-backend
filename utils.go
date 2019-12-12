@@ -96,9 +96,11 @@ func WriteError(w http.ResponseWriter, code int, message string) {
 
 func SendSocketMessage(message SocketMessage, UUID string, storeOnFail bool) bool {
 	hashUUID := Hash(UUID)
+
 	clientsMutex.RLock()
 	socket, ok := clients[hashUUID]
 	clientsMutex.RUnlock()
+
 	if ok {
 		jsonReply, err := json.Marshal(message)
 		Handle(err)
