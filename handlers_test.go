@@ -72,6 +72,7 @@ func TestCredentialHandler(t *testing.T) {
 
 func TestWSHandler(t *testing.T) {
 	user, form := GenUser()
+	time.Sleep(time.Millisecond * time.Duration(100))
 
 	wsheader := http.Header{}
 	var headers = []struct {
