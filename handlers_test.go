@@ -87,14 +87,9 @@ func TestWSHandler(t *testing.T) {
 
 	for _, tt := range headers {
 		wsheader.Set(tt.key, tt.value)
-		server, res, ws, err := ConnectWSSHeader(wsheader)
+		_, res, _, err := ConnectWSSHeader(wsheader)
 		if err == nil != tt.out {
-			println(tt.key + " " + tt.value)
-			t.Errorf("got %v, wanted %v - %v %v", err == nil, tt.out, res.Status, err)
-		}
-		if ws != nil {
-			_ = ws.Close()
-			server.Close()
+			t.Errorf("got %v, wanted %v - %v %v %v", err == nil, tt.out, res.Status, err, wsheader)
 		}
 	}
 }
