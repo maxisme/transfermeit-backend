@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go: [ '1.12', '1.13']
+        go: ['1.12', '1.13']
     steps:
       - uses: actions/checkout@master
       - name: Setup Go
@@ -25,4 +25,4 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
       - name: Test
-        run: session_key=UH9ax500yN4mnTO60WLY2ae943tsqzFw test_db_host="root:root@" db="root:root@/transfermeit_test" go test
+        run: session_key=UH9ax500yN4mnTO60WLY2ae943tsqzFw test_db_host="root:root@" db="root:root@/transfermeit_test" go test -v
