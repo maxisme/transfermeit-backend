@@ -186,6 +186,8 @@ func IsValidUserCredentials(db *sql.DB, user User) bool {
         FROM user
         WHERE UUID = ? AND UUID_key = ?`, Hash(user.UUID), Hash(user.UUIDKey))
 		err := result.Scan(&id)
+		Handle(err)
+		log.Println(id)
 		if err == nil && id > 0 {
 			return true
 		}
