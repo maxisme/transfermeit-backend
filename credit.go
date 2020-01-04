@@ -8,7 +8,7 @@ var CREDITCODELEN = 100
 
 // set the users perm code as long as it is what they are expecting
 func SetUsersPermCode(db *sql.DB, user *User, expectedPermCode string) {
-	permCode, customCode := GetUsersPermCode(db, *user)
+	permCode, customCode := GetUserPermCode(db, *user)
 	var code string
 	if customCode.Valid {
 		code = customCode.String
@@ -20,7 +20,7 @@ func SetUsersPermCode(db *sql.DB, user *User, expectedPermCode string) {
 	}
 }
 
-func GetUsersPermCode(db *sql.DB, user User) (permCode sql.NullString, customCode sql.NullString) {
+func GetUserPermCode(db *sql.DB, user User) (permCode sql.NullString, customCode sql.NullString) {
 	result := db.QueryRow(`
 	SELECT perm_user_code, custom_user_code
 	FROM credit
@@ -59,7 +59,7 @@ func SetCreditCode(db *sql.DB, user User, activationCode string) error {
 	AND UUID IS NULL`, Hash(user.UUID), activationCode))
 }
 
-func SetUsersCredit(db *sql.DB, user *User) {
+func SetUserCredit(db *sql.DB, user *User) {
 	if user.Credit > 0 {
 		// already set the users credit
 		return

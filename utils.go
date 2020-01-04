@@ -164,7 +164,7 @@ func BytesToReadable(bytes int) string {
 	)
 }
 
-func FileHash(bytes []byte) string {
+func HashBytes(bytes []byte) string {
 	hasher := sha256.New()
 	_, err := hasher.Write(bytes)
 	Handle(err)

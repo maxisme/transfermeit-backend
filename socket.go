@@ -83,7 +83,7 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 		if mess.Type == "keep-alive" {
 			Handle(KeepAliveTransfer(s.db, user, mess.Content))
 		} else if mess.Type == "stats" {
-			SetUsersStats(s.db, &user)
+			SetUserStats(s.db, &user)
 			SendSocketMessage(SocketMessage{
 				User: &user,
 			}, user.UUID, true)

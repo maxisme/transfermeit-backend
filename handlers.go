@@ -41,7 +41,7 @@ func (s *Server) TogglePermCodeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// fetch form
+	// fetch post data
 	if err := r.ParseForm(); err != nil {
 		WriteError(w, 400, "Invalid form data")
 		return
@@ -58,9 +58,9 @@ func (s *Server) TogglePermCodeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	SetUsersTier(s.db, &user)
+	SetUserTier(s.db, &user)
 	if user.Tier >= PERMUSER {
-		permCode, customCode := GetUsersPermCode(s.db, user)
+		permCode, customCode := GetUserPermCode(s.db, user)
 		if permCode.Valid || customCode.Valid {
 			// toggle off any stored codes (INCLUDING custom code)
 			err := RemovePermCodes(s.db, user)
@@ -108,7 +108,7 @@ func (s *Server) CustomCodeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	SetUsersTier(s.db, &user)
+	SetUserTier(s.db, &user)
 	if user.Tier >= CODEUSER {
 		if err := SetCustomCode(s.db, user); err == nil {
 			jsonReply, _ := json.Marshal(user)
@@ -206,7 +206,7 @@ func (s *Server) CredentialHandler(w http.ResponseWriter, r *http.Request) {
 		user.Bandwidth = FREEBANDWIDTH
 		user.MinsAllowed = DEFAULTMIN
 		user.WantedMins = DEFAULTMIN
-		user.EndTime = time.Now().Add(time.Minute * time.Duration(wantedMins)).UTC()
+		user.Expiry = time.Now().Add(time.Minute * time.Duration(wantedMins)).UTC()
 		go CreateNewUser(s.db, user)
 	} else {
 		if len(UUIDKey) == 0 {
@@ -225,14 +225,14 @@ func (s *Server) CredentialHandler(w http.ResponseWriter, r *http.Request) {
 			SetUsersPermCode(s.db, &user, expectedPermCode)
 		}
 
-		SetUsersStats(s.db, &user)
+		SetUserStats(s.db, &user)
 
 		if wantedMins > user.MinsAllowed {
 			wantedMins = DEFAULTMIN
 		}
 		user.WantedMins = wantedMins
 
-		user.EndTime = time.Now().Add(time.Minute * time.Duration(wantedMins)).UTC()
+		user.Expiry = time.Now().Add(time.Minute * time.Duration(wantedMins)).UTC()
 		go UpdateUser(s.db, user)
 	}
 
@@ -242,6 +242,9 @@ func (s *Server) CredentialHandler(w http.ResponseWriter, r *http.Request) {
 	Handle(err)
 }
 
+// the InitUploadHandler tells the server what to suspect in the UploadHandler and
+// handles most validation such as file and bandwidth limits for the user.
+// This is done before so as to not have to wait for the to be transfered to the server
 func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		WriteError(w, 400, "Invalid method")
@@ -286,7 +289,7 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	SetUserWantedMins(s.db, &user)
 
-	SetUsersMaxFileUpload(s.db, &user)
+	SetUserMaxFileUpload(s.db, &user)
 	if user.MaxFileSize-filesize < 0 {
 		log.Printf("transfer with %v difference", BytesToMegabytes(user.MaxFileSize-filesize))
 		mb := BytesToMegabytes(user.MaxFileSize)
@@ -313,7 +316,7 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	transfer.ID = InsertTransfer(s.db, transfer)
-	transfer.from.UUID = "" // for privacy reasons
+	transfer.from.UUID = "" // for privacy
 
 	// store transfer in session
 	session := InitSession(r)
@@ -326,18 +329,10 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 	Handle(err)
 }
 
+// Only works after running InitUploadHandler
 func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", 400)
-		return
-	}
-
-	err := r.ParseMultipartForm(int64(GLOBALMAXFILESIZEMB << 20))
-	Handle(err)
-
-	// fetch form
-	if err := r.ParseForm(); err != nil {
-		WriteError(w, 400, "Invalid form data")
 		return
 	}
 
@@ -347,40 +342,47 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, 401, "Init transfer not run")
 		return
 	}
-	transfer := session.Values[UPLOADSESSIONNAME].(Transfer)
-	if transfer.ID == 0 {
+	sessionTransfer := session.Values[UPLOADSESSIONNAME].(Transfer)
+	if sessionTransfer.ID == 0 {
 		WriteError(w, 401, "Init transfer not run")
 		return
 	}
+
+	// delete session
 	session.Values[UPLOADSESSIONNAME] = nil
-	err = session.Save(r, w)
+	err := session.Save(r, w)
 	Handle(err)
 
-	// get encrypted with friends public key password
-	transfer.password = r.Form.Get("password")
+	err = r.ParseMultipartForm(int64(GLOBALMAXFILESIZEMB << 20))
+	Handle(err)
+
+	// get POST data
+	if err := r.ParseForm(); err != nil {
+		WriteError(w, 400, "Invalid form data")
+		return
+	}
+
+	// get (encrypted with friends public key) password
+	sessionTransfer.password = r.Form.Get("password")
 
 	// get file from form
 	file, handler, err := r.FormFile("file")
 	defer file.Close()
 	Handle(err)
 
-	// verify init transfer against actual file Size
-	// should be less than expected as it is compressed
-	if int(handler.Size) > transfer.Size {
-		m := fmt.Sprintf("You lied about the transfer Size expected %v got %v!", transfer.Size, int(handler.Size))
+	// verify session data from InitUploadHandler against actual file Size
+	// should be less than expected as it should have been compressed since.
+	if int(handler.Size) > sessionTransfer.Size {
+		m := fmt.Sprintf("You lied about the transfer Size expected %v got %v!", sessionTransfer.Size, int(handler.Size))
 		WriteError(w, 401, m)
 		return
 	}
-	transfer.Size = int(handler.Size)
 
-	// get file bytes
+	// extract file to bytes
 	fileBytes, err := ioutil.ReadAll(file)
 	Handle(err)
 
-	// get file hash
-	transfer.hash = FileHash(fileBytes)
-
-	// write file
+	// write file to server
 	dir := FILEDIR + RandomString(USERDIRLEN)
 	err = os.MkdirAll(dir, 0744)
 	Handle(err)
@@ -388,8 +390,12 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	err = ioutil.WriteFile(fileLocation, fileBytes, 0744)
 	Handle(err)
 
+	// initialise transfer
+	transfer := sessionTransfer
 	transfer.FilePath = strings.Replace(fileLocation, FILEDIR, "", -1)
-	transfer.expiry = time.Now().Add(time.Minute * time.Duration(transfer.from.WantedMins))
+	transfer.expiry = time.Now().Add(time.Minute * time.Duration(sessionTransfer.from.WantedMins))
+	transfer.hash = HashBytes(fileBytes)
+	transfer.Size = int(handler.Size)
 
 	err = UpdateTransfer(s.db, transfer)
 	Handle(err)

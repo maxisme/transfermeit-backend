@@ -51,7 +51,7 @@ func GetTransferPasswordAndUUID(db *sql.DB, transfer Transfer) (password string,
 	return password, UUID
 }
 
-// check user isn't already transferring a file to the same friend
+// validate user isn't already transferring a file to the same friend
 func IsAlreadyTransferring(db *sql.DB, transfer *Transfer) bool {
 	result := db.QueryRow(`
 	SELECT file_path
@@ -92,13 +92,15 @@ func InsertTransfer(db *sql.DB, transfer Transfer) int {
 
 func UpdateTransfer(db *sql.DB, transfer Transfer) error {
 	return UpdateErr(db.Exec(`
-	UPDATE transfer set size=?, file_hash=?, file_path=?, password=?, expiry_dttm=?, updated_dttm=NOW()
+	UPDATE transfer 
+	SET size=?, file_hash=?, file_path=?, password=?, expiry_dttm=?, updated_dttm=NOW()
 	WHERE id=?`, transfer.Size, transfer.hash, transfer.FilePath, transfer.password, transfer.expiry, transfer.ID))
 }
 
 func KeepAliveTransfer(db *sql.DB, user User, path string) error {
 	return UpdateErr(db.Exec(`
-	UPDATE transfer set size=updated_dttm=NOW()
+	UPDATE transfer 
+	SET updated_dttm=NOW()
 	WHERE file_path=?
 	AND to_UUID
 	OR from_UUID`, path, Hash(user.UUID), Hash(user.UUID)))
@@ -127,10 +129,10 @@ func CompleteTransfer(db *sql.DB, transfer Transfer, failed bool, expired bool) 
 		message.Message = "Your friend has received your file!"
 
 		// send user stats update to sender
-		from := User{UUID: transfer.from.UUID}
-		SetUsersStats(db, &from)
+		fromUser := User{UUID: transfer.from.UUID}
+		SetUserStats(db, &fromUser)
 		SendSocketMessage(SocketMessage{
-			User: &from,
+			User: &fromUser,
 		}, transfer.from.UUID, true)
 	}
 
@@ -173,7 +175,7 @@ func (s *Server) CleanIncompleteTransfers() {
 	log.Println("FINISHED CLEANUP - deleted " + strconv.Itoa(cnt) + " rows")
 }
 
-func FetchAllDisplayTransfers(db *sql.DB) []DisplayTransfer {
+func GetAllDisplayTransfers(db *sql.DB) []DisplayTransfer {
 	var transfers []DisplayTransfer
 	if u, found := c.Get("transfers"); found {
 		transfers = u.([]DisplayTransfer)

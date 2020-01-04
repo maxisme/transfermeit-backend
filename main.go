@@ -68,6 +68,6 @@ func main() {
 	mux.Handle("/toggle-perm-code", customCallback(s.TogglePermCodeHandler))
 	mux.Handle("/custom-code", customCallback(s.CustomCodeHandler))
 
-	mux.HandleFunc("/live", s.liveHandler)
+	mux.HandleFunc("/live", s.LiveHandler)
 	graceful.ListenAndServe(&http.Server{Addr: ":8080", Handler: mux})
 }

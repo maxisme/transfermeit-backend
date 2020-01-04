@@ -120,12 +120,15 @@ func UploadFile(f *os.File, initCookie string, pass string) *httptest.ResponseRe
 }
 
 func TestUploadDownloadCycle(t *testing.T) {
+
+	// create two users
 	user1, form1 := GenUser()
 	user2, form2 := GenUser()
-
 	_, _, user1Ws, _ := ConnectWSS(user1, form1)
 
-	// UPLOAD
+	////////////
+	// UPLOAD //
+	////////////
 
 	// create a file
 	fileSize := MegabytesToBytes(10)
@@ -135,7 +138,7 @@ func TestUploadDownloadCycle(t *testing.T) {
 	defer os.Remove("foo.bar")
 	_ = f.Truncate(encryptedFileSize)
 
-	// initial upload
+	// initial upload to tell
 	initUploadR := InitUpload(form1, user1, user2, fileSize)
 	if initUploadR.Code != 200 {
 		t.Errorf("Got %v (%v) expected %v", initUploadR.Code, initUploadR.Body, 200)
@@ -212,7 +215,7 @@ func TestCodeTimeout(t *testing.T) {
 
 	message := ReadSocketMessage(ws)
 
-	secondsLeft := math.Floor(message.User.EndTime.Sub(time.Now()).Seconds())
+	secondsLeft := math.Floor(message.User.Expiry.Sub(time.Now()).Seconds())
 	estimatedSecondsLeft := DEFAULTMIN*60 - secondHang
 
 	if estimatedSecondsLeft != int(secondsLeft) && estimatedSecondsLeft-1 != int(secondsLeft) {

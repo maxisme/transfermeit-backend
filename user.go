@@ -34,7 +34,7 @@ type User struct {
 	Code        string    `json:"user_code"`
 	Bandwidth   int       `json:"bw_left"`
 	MaxFileSize int       `json:"max_fs"`
-	EndTime     time.Time `json:"end_time"`
+	Expiry      time.Time `json:"end_time"`
 	MinsAllowed int       `json:"mins_allowed"`
 	WantedMins  int       `json:"wanted_mins"`
 	Tier        int       `json:"user_tier"`
@@ -45,7 +45,7 @@ type User struct {
 func CreateNewUser(db *sql.DB, user User) {
 	_, err := db.Exec(`
 	INSERT INTO user (code, UUID, UUID_key, public_key, code_end_dttm, registered_dttm)
-	VALUES (?, ?, ?, ?, ?, NOW())`, user.Code, Hash(user.UUID), Hash(user.UUIDKey), user.PublicKey, user.EndTime)
+	VALUES (?, ?, ?, ?, ?, NOW())`, user.Code, Hash(user.UUID), Hash(user.UUIDKey), user.PublicKey, user.Expiry)
 	Handle(err)
 }
 
@@ -53,7 +53,7 @@ func UpdateUser(db *sql.DB, user User) {
 	Handle(UpdateErr(db.Exec(`
 	UPDATE user 
 	SET code = ?, public_key = ?, wanted_mins = ?, code_end_dttm = ?
-	WHERE UUID=?`, user.Code, user.PublicKey, user.WantedMins, user.EndTime, Hash(user.UUID))))
+	WHERE UUID=?`, user.Code, user.PublicKey, user.WantedMins, user.Expiry, Hash(user.UUID))))
 }
 
 func SetUserUUIDKey(db *sql.DB, user User) {
@@ -63,8 +63,8 @@ func SetUserUUIDKey(db *sql.DB, user User) {
 	WHERE UUID=?`, Hash(user.UUIDKey), Hash(user.UUID))))
 }
 
-func SetUsersTier(db *sql.DB, user *User) {
-	SetUsersCredit(db, user)
+func SetUserTier(db *sql.DB, user *User) {
+	SetUserCredit(db, user)
 	user.Tier = FREEUSER
 	if user.Credit >= CODECRED {
 		user.Tier = CODEUSER
@@ -75,7 +75,7 @@ func SetUsersTier(db *sql.DB, user *User) {
 	}
 }
 
-func SetUsersMinsAllowed(user *User) {
+func SetUserMinsAllowed(user *User) {
 	if user.Tier == CODEUSER {
 		user.MinsAllowed = 60
 	} else if user.Tier == PERMUSER {
@@ -86,24 +86,24 @@ func SetUsersMinsAllowed(user *User) {
 	user.MinsAllowed = DEFAULTMIN
 }
 
-func DeleteCode(db *sql.DB, user User) error {
-	return UpdateErr(db.Exec(`UPDATE user
+func purgeCode(db *sql.DB, user User) {
+	_ = UpdateErr(db.Exec(`UPDATE user
 	SET code = NULL, code_end_dttm = NULL
 	WHERE UUID = ? AND UUID_key = ?`, user.UUID, user.UUIDKey))
 }
 
-func SetUsersStats(db *sql.DB, user *User) {
+func SetUserStats(db *sql.DB, user *User) {
 	// get code time left
-	SetUserCodeEndTime(db, user)
-	if user.EndTime.Sub(time.Now()) <= 0 {
+	SetUserCodeExpiry(db, user)
+	if user.Expiry.Sub(time.Now()) <= 0 {
 		// user has expired
-		go DeleteCode(db, *user)
+		go purgeCode(db, *user)
 	}
 
-	SetUsersMinsAllowed(user)
-	SetUsersTier(db, user)
+	SetUserMinsAllowed(user)
+	SetUserTier(db, user)
 	user.Bandwidth = GetUserBandwidthLeft(db, user)
-	SetUsersMaxFileUpload(db, user)
+	SetUserMaxFileUpload(db, user)
 }
 
 func UserSocketConnected(db *sql.DB, user User, connected bool) {
@@ -145,24 +145,24 @@ func GetUserUsedBandwidth(db *sql.DB, user User) (bytes int) {
 }
 
 func GetUserBandwidthLeft(db *sql.DB, user *User) int {
-	SetUsersCredit(db, user)
+	SetUserCredit(db, user)
 	usedBandwidth := GetUserUsedBandwidth(db, *user)
 	creditedBandwidth := CreditToBandwidth(user.Credit)
 	return creditedBandwidth - usedBandwidth
 }
 
-func SetUsersMaxFileUpload(db *sql.DB, user *User) {
-	SetUsersCredit(db, user)
+func SetUserMaxFileUpload(db *sql.DB, user *User) {
+	SetUserCredit(db, user)
 	user.MaxFileSize = CreditToFileUploadSize(user.Credit)
 }
 
-func SetUserCodeEndTime(db *sql.DB, user *User) {
+func SetUserCodeExpiry(db *sql.DB, user *User) {
 	result := db.QueryRow(`SELECT code_end_dttm
 	FROM user
 	WHERE UUID = ?`, Hash(user.UUID))
-	err := result.Scan(&user.EndTime)
-	if err != nil || user.EndTime.IsZero() {
-		user.EndTime = time.Now().UTC()
+	err := result.Scan(&user.Expiry)
+	if err != nil || user.Expiry.IsZero() {
+		user.Expiry = time.Now().UTC()
 	}
 }
 
@@ -203,12 +203,12 @@ func codeExists(db *sql.DB, code string) bool {
 }
 
 func GenUserCode(db *sql.DB) string {
-	var letter = []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+	var letters = []rune("ABCDEFGHJKMNPQRSTUVWXYZ23456789")
 
 	for {
 		b := make([]rune, CODELEN)
 		for i := range b {
-			b[i] = letter[rand.Intn(len(letter))]
+			b[i] = letters[rand.Intn(len(letters))]
 		}
 		code := string(b)
 		if !codeExists(db, code) {
@@ -225,7 +225,7 @@ func SetUserWantedMins(db *sql.DB, user *User) {
 	Handle(err)
 }
 
-func FetchAllDisplayUsers(db *sql.DB) []DisplayUser {
+func GetAllDisplayUsers(db *sql.DB) []DisplayUser {
 	var users []DisplayUser
 	u, found := c.Get("users")
 	if found {
