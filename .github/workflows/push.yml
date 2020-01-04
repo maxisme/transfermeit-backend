@@ -37,4 +37,4 @@ jobs:
           username: github
           key: ${{ secrets.KEY }}
           script: |
-            sudo /bin/bash /root/transfermeit-backend/deploy.sh ${{ github.sha }}
+            sudo /root/transfermeit-backend/deploy.sh ${{ github.sha }}
