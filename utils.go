@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/getsentry/sentry-go"
 	"github.com/gorilla/sessions"
 	"github.com/gorilla/websocket"
 	"log"
@@ -17,6 +18,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"time"
 )
 
 var (
@@ -30,6 +32,10 @@ func Handle(err error) {
 		pc, _, _, _ := runtime.Caller(1)
 		details := runtime.FuncForPC(pc)
 		log.Println("Fatal: " + err.Error() + " - " + details.Name())
+
+		// log to sentry
+		sentry.CaptureException(err)
+		sentry.Flush(time.Second * 5)
 	}
 }
 
