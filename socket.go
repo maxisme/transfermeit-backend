@@ -44,37 +44,36 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// connect to socket
-	wsconn, _ := upgrader.Upgrade(w, r, nil)
+	wsconn, _ := Upgrader.Upgrade(w, r, nil)
 
 	// add web socket connection to list of clients
-	clientsMutex.Lock()
-	clients[Hash(user.UUID)] = wsconn
-	clientsMutex.Unlock()
+	ClientsMutex.Lock()
+	Clients[Hash(user.UUID)] = wsconn
+	ClientsMutex.Unlock()
 
 	// mark user as connected in db
 	go UserSocketConnected(s.db, r.Header.Get("UUID"), true)
 
 	// get pending messages
-	pendingSocketMutex.RLock()
-	messages, ok := pendingSocketMessages[Hash(user.UUID)]
-	pendingSocketMutex.RUnlock()
+	PendingSocketMutex.RLock()
+	messages, ok := PendingSocketMessages[Hash(user.UUID)]
+	PendingSocketMutex.RUnlock()
 	if ok {
 		// send pending messages
 		for _, message := range messages {
 			SendSocketMessage(message, Hash(user.UUID), false)
 		}
 
-		// delete pending messages
-		pendingSocketMutex.Lock()
-		delete(pendingSocketMessages, Hash(user.UUID))
-		pendingSocketMutex.Unlock()
+		// delete any pending messages
+		PendingSocketMutex.Lock()
+		delete(PendingSocketMessages, Hash(user.UUID))
+		PendingSocketMutex.Unlock()
 	}
 
 	// incoming socket messages
 	for {
 		_, message, err := wsconn.ReadMessage()
 		if err != nil {
-			Handle(err)
 			break
 		}
 
@@ -91,10 +90,11 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 		break
 	}
 
+	// mark user as disconnected
 	go UserSocketConnected(s.db, r.Header.Get("UUID"), false)
 
 	// remove client from clients
-	clientsMutex.Lock()
-	delete(clients, user.UUID)
-	clientsMutex.Unlock()
+	ClientsMutex.Lock()
+	delete(Clients, user.UUID)
+	ClientsMutex.Unlock()
 }

@@ -22,9 +22,8 @@ import (
 )
 
 var (
-	appSession        *sessions.Session
-	store             = sessions.NewCookieStore([]byte(os.Getenv("session_key")))
-	UPLOADSESSIONNAME = "upload"
+	appSession *sessions.Session
+	store      = sessions.NewCookieStore([]byte(os.Getenv("session_key")))
 )
 
 func Handle(err error) {
@@ -68,11 +67,11 @@ func BytesToMegabytes(bytes int) float64 {
 }
 
 func CreditToFileUploadSize(credit float64) (bytes int) {
-	bytes = FREEFILEUPLOAD
+	bytes = FreeFileUploadBytes
 	for {
 		if credit > 0 {
-			bytes += FREEFILEUPLOAD
-			credit -= CREDITSTEPS
+			bytes += FreeFileUploadBytes
+			credit -= CreditSteps
 			continue
 		}
 		break
@@ -81,11 +80,11 @@ func CreditToFileUploadSize(credit float64) (bytes int) {
 }
 
 func CreditToBandwidth(credit float64) (bytes int) {
-	bytes = FREEBANDWIDTH
+	bytes = FreeBandwidthBytes
 	for {
 		if credit > 0 {
-			bytes += FREEBANDWIDTH
-			credit -= CREDITSTEPS
+			bytes += FreeBandwidthBytes
+			credit -= CreditSteps
 			continue
 		}
 		break
@@ -95,7 +94,7 @@ func CreditToBandwidth(credit float64) (bytes int) {
 
 func WriteError(w http.ResponseWriter, code int, message string) {
 	w.WriteHeader(code)
-	log.Println("http error:" + message)
+	log.Println("http error: " + message)
 	_, err := w.Write([]byte(message))
 	Handle(err)
 }
@@ -103,9 +102,9 @@ func WriteError(w http.ResponseWriter, code int, message string) {
 func SendSocketMessage(message SocketMessage, UUID string, storeOnFail bool) bool {
 	hashUUID := Hash(UUID)
 
-	clientsMutex.RLock()
-	socket, ok := clients[hashUUID]
-	clientsMutex.RUnlock()
+	ClientsMutex.RLock()
+	socket, ok := Clients[hashUUID]
+	ClientsMutex.RUnlock()
 
 	if ok {
 		jsonReply, err := json.Marshal(message)
@@ -122,9 +121,9 @@ func SendSocketMessage(message SocketMessage, UUID string, storeOnFail bool) boo
 	}
 
 	if storeOnFail {
-		pendingSocketMutex.Lock()
-		pendingSocketMessages[hashUUID] = append(pendingSocketMessages[hashUUID], message)
-		pendingSocketMutex.Unlock()
+		PendingSocketMutex.Lock()
+		PendingSocketMessages[hashUUID] = append(PendingSocketMessages[hashUUID], message)
+		PendingSocketMutex.Unlock()
 	}
 
 	return false
@@ -134,7 +133,7 @@ func InitSession(r *http.Request) *sessions.Session {
 	if appSession != nil {
 		return appSession
 	}
-	session, err := store.Get(r, UPLOADSESSIONNAME)
+	session, err := store.Get(r, UploadSessionName)
 	appSession = session
 	Handle(err)
 	return session

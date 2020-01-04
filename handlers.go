@@ -17,17 +17,21 @@ import (
 )
 
 var (
-	clients      = make(map[string]*websocket.Conn)
-	clientsMutex = sync.RWMutex{}
+	Clients      = make(map[string]*websocket.Conn)
+	ClientsMutex = sync.RWMutex{}
 )
-var upgrader = websocket.Upgrader{
+
+var Upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 }
 
+const UploadSessionName = "upload"
+
 func SecKeyHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Sec-Key") != os.Getenv("server_key") {
+			println(r.Header.Get("Sec-Key"))
 			http.Error(w, "Invalid form data", 400)
 			return
 		}
@@ -196,14 +200,14 @@ func (s *Server) CredentialHandler(w http.ResponseWriter, r *http.Request) {
 	UUIDKey, userExists := GetUUIDKey(s.db, user)
 
 	if userExists && len(UUIDKey) > 0 && !IsValidUserCredentials(s.db, user) {
-		WriteError(w, 402, "Invalid UUID key")
+		WriteError(w, 402, "Invalid UUID key. Ask hello@transferme.it to reset")
 		return
 	} else if !userExists {
 		log.Println("Creating new user " + user.UUID)
 		// create new tmi user
 		user.UUIDKey = RandomString(UUIDKEYLEN)
-		user.MaxFileSize = FREEFILEUPLOAD
-		user.Bandwidth = FREEBANDWIDTH
+		user.MaxFileSize = FreeFileUploadBytes
+		user.Bandwidth = FreeBandwidthBytes
 		user.MinsAllowed = DEFAULTMIN
 		user.WantedMins = DEFAULTMIN
 		user.Expiry = time.Now().Add(time.Minute * time.Duration(wantedMins)).UTC()
@@ -318,10 +322,10 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 	transfer.ID = InsertTransfer(s.db, transfer)
 	transfer.from.UUID = "" // for privacy
 
-	// store transfer in session
+	// store transfer information in session
 	session := InitSession(r)
 	gob.Register(Transfer{})
-	session.Values[UPLOADSESSIONNAME] = transfer
+	session.Values[UploadSessionName] = transfer
 	err = session.Save(r, w)
 	Handle(err)
 
@@ -338,22 +342,22 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	// get session transfer
 	session := InitSession(r)
-	if session.Values[UPLOADSESSIONNAME] == nil {
+	if session.Values[UploadSessionName] == nil {
 		WriteError(w, 401, "Init transfer not run")
 		return
 	}
-	sessionTransfer := session.Values[UPLOADSESSIONNAME].(Transfer)
+	sessionTransfer := session.Values[UploadSessionName].(Transfer)
 	if sessionTransfer.ID == 0 {
 		WriteError(w, 401, "Init transfer not run")
 		return
 	}
 
 	// delete session
-	session.Values[UPLOADSESSIONNAME] = nil
+	session.Values[UploadSessionName] = nil
 	err := session.Save(r, w)
 	Handle(err)
 
-	err = r.ParseMultipartForm(int64(GLOBALMAXFILESIZEMB << 20))
+	err = r.ParseMultipartForm(int64(MaxFileUploadSizeMB << 20))
 	Handle(err)
 
 	// get POST data
@@ -383,7 +387,7 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	Handle(err)
 
 	// write file to server
-	dir := FILEDIR + RandomString(USERDIRLEN)
+	dir := FILEDIR + RandomString(UserDirLen)
 	err = os.MkdirAll(dir, 0744)
 	Handle(err)
 	fileLocation := dir + "/" + handler.Filename

@@ -160,7 +160,7 @@ func TestUploadDownloadCycle(t *testing.T) {
 	_, _, user2Ws, _ := ConnectWSS(user2, form2)
 	message := ReadSocketMessage(user2Ws)
 	filePath := message.Download.FilePath
-	if len(path.Dir(filePath)) != USERDIRLEN {
+	if len(path.Dir(filePath)) != UserDirLen {
 		t.Fatalf(filePath)
 	}
 	user2Ws.Close()
@@ -191,8 +191,8 @@ func TestUploadDownloadCycle(t *testing.T) {
 	}
 
 	message = ReadSocketMessage(user1Ws)
-	if message.User.Bandwidth != FREEBANDWIDTH-fileSize {
-		t.Errorf("expected %v got %v", FREEBANDWIDTH-fileSize, message.User.Bandwidth)
+	if message.User.Bandwidth != FreeBandwidthBytes-fileSize {
+		t.Errorf("expected %v got %v", FreeBandwidthBytes-fileSize, message.User.Bandwidth)
 	}
 
 	message = ReadSocketMessage(user1Ws)

@@ -2,7 +2,7 @@
 # for ssh access:
 # $ adduser github
 # $ visudo
-# github ALL = NOPASSWD: /bin/bash /path/to/deploy.sh
+# github ALL = NOPASSWD: /path/to/deploy.sh
 
 if [[ -z "$1" ]]
 then

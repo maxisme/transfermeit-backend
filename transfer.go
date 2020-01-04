@@ -12,17 +12,20 @@ import (
 	"time"
 )
 
-var GLOBALMAXFILESIZEMB = 5000
-var (
-	FREEFILEUPLOAD = MegabytesToBytes(250)
-	FREEBANDWIDTH  = FREEFILEUPLOAD * 10
-	CREDITSTEPS    = 0.5
+const (
+	MaxFileUploadSizeMB = 5000
+	FreeFileUploadBytes = 250000000
+	FreeBandwidthBytes  = FreeFileUploadBytes * 10
+
+	CreditSteps = 0.5
+	UserDirLen  = 50
 )
+
 var (
-	pendingSocketMessages = map[string][]SocketMessage{}
-	pendingSocketMutex    = sync.RWMutex{}
+	PendingSocketMessages = map[string][]SocketMessage{}
+	PendingSocketMutex    = sync.RWMutex{}
 )
-var USERDIRLEN = 50
+
 var FILEDIR = os.Getenv("file_dir")
 
 type Transfer struct {

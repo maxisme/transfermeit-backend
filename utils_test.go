@@ -10,7 +10,7 @@ var creditToBytes = []struct {
 	credit float64
 	bytes  int
 }{
-	{0.0, FREEFILEUPLOAD},
+	{0.0, FreeFileUploadBytes},
 	{5.0, MegabytesToBytes(2750)},
 	{7.5, MegabytesToBytes(4000)},
 }
@@ -31,7 +31,7 @@ var creditToBandwidth = []struct {
 	credit    float64
 	bandwidth int
 }{
-	{0.0, FREEBANDWIDTH},
+	{0.0, FreeBandwidthBytes},
 	{5.0, MegabytesToBytes(27500)},
 	{7.5, MegabytesToBytes(40000)},
 }
