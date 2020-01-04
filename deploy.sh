@@ -1,8 +1,24 @@
 #!/bin/bash
-# cd /root/ && git clone https://github.com/maxisme/transfermeit-backend
+# for ssh access:
+# $ adduser github
 # $ visudo
-# jenk ALL = NOPASSWD: /bin/bash /root/transfermeit-backend/deploy.sh
-# remember to add .env file
+# github ALL = NOPASSWD: /bin/bash /path/to/deploy.sh
+
+if [[ -z "$1" ]]
+then
+    echo "No commit sha $@"
+    exit 1
+fi
+
+# insure only deploying one at a time
+DEPLOY_FILE="/tmp/deploying.txt"
+while [ -f $DEPLOY_FILE ]
+do
+    echo "Waiting for another deploy to finish..."
+    sleep 1
+done
+touch $DEPLOY_FILE
+trap $(rm -f $DEPLOY_FILE)
 
 cd $(dirname "$0")
 
@@ -12,8 +28,9 @@ diffs=$(git diff master origin/master)
 if [ ! -z "$diffs" ]
 then
     echo "Pulling code from GitHub..."
+    git fetch origin
     git checkout master
-    git pull origin master
+    git merge $1
 
     # run db migrations
     docker-compose up flyway
