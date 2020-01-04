@@ -106,7 +106,7 @@ func SetUserStats(db *sql.DB, user *User) {
 	SetUserMaxFileUpload(db, user)
 }
 
-func UserSocketConnected(db *sql.DB, user User, connected bool) {
+func UserSocketConnected(db *sql.DB, UUID string, connected bool) {
 	isConnected := 1
 	if !connected {
 		isConnected = 0
@@ -114,7 +114,7 @@ func UserSocketConnected(db *sql.DB, user User, connected bool) {
 
 	Handle(UpdateErr(db.Exec(`UPDATE user
 	SET is_connected = ?
-	WHERE UUID = ? AND UUID_key = ?`, isConnected, Hash(user.UUID), Hash(user.UUIDKey))))
+	WHERE UUID = ?`, isConnected, Hash(UUID))))
 }
 
 func GetUUIDKey(db *sql.DB, user User) (string, bool) {

@@ -52,7 +52,7 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	clientsMutex.Unlock()
 
 	// mark user as connected in db
-	go UserSocketConnected(s.db, user, true)
+	go UserSocketConnected(s.db, r.Header.Get("UUID"), true)
 
 	// get pending messages
 	pendingSocketMutex.RLock()
@@ -91,7 +91,7 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 		break
 	}
 
-	go UserSocketConnected(s.db, user, false)
+	go UserSocketConnected(s.db, r.Header.Get("UUID"), false)
 
 	// remove client from clients
 	clientsMutex.Lock()
