@@ -1,11 +1,9 @@
 name: Transfer Me It
-on:
-  push:
-    branches:
-      - master
+on: [push]
+
 jobs:
   test:
-    name: Run tests
+    name: Test with version
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -29,8 +27,13 @@ jobs:
       - name: Test
         run: session_key=UH9ax500yN4mnTO60WLY2ae943tsqzFw test_db_host="root:root@" db="root:root@/transfermeit_test" go test -v
 
+  deploy:
+    name: Deploy
+    if: github.ref == 'refs/heads/master'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
       - name: Deploy
-        if: github.ref == 'refs/heads/master'
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.HOST }}
