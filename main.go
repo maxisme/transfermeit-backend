@@ -40,7 +40,7 @@ func main() {
 	}
 
 	// connect to MySQL db
-	db, err := DBConn(os.Getenv("db") + "?parseTime=true&loc=" + time.Local.String())
+	db, err := DBConn(os.Getenv("db") + "/transfermeit?parseTime=true&loc=" + time.Local.String())
 	if err != nil {
 		log.Fatal(err)
 	}
