@@ -25,18 +25,26 @@ cd $(dirname "$0")
 git fetch &> /dev/null
 diffs=$(git diff master origin/master)
 
-if [ ! -z "$diffs" ]
+if [[ ! -z "$diffs" ]]
 then
     echo "Pulling code from GitHub..."
     git fetch origin
     git checkout master
     git merge $1
 
-    # run db migrations
-    docker-compose up flyway
+    # update schema (-database arg came from docker-compose)
+    if ! migrate -source=file://sql/ -database mysql://transfermeit:transfermeit@/transfermeit up
+    then
+        echo "Failed to run sql migration"
+        exit 1
+    fi
 
-    # update server
-    docker-compose build app
+    # update app
+    if ! docker-compose build app
+    then
+        echo "Failed to build app"
+        exit 1
+    fi
     docker-compose up --no-deps -d app
 
     # kill all unused dockers
@@ -44,3 +52,5 @@ then
 else
     echo "Already up to date"
 fi
+
+rm -f $DEPLOY_FILE

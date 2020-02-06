@@ -5,10 +5,13 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/Pallinder/go-randomdata"
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/mysql"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
@@ -23,28 +26,46 @@ import (
 var s Server
 var b64PubKey = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvxvSoA5+YJ0dK3HFy9ccnalbqSgVGJYmQXl/1JBcN1zZGUrsBDAPRdX+TTgWbW4Ah8C+PUVmf6YbA5d+ZWmBUIYds4Ft/v2qbh3/rBEFvNw+/HhspclzwI1On6EcnylLalpF6JYYjuw4QqIJd/CsnABZwAFQ8czdtUbomic7gh9UdjkEFed5C3QqD3Nes7w7glkrEocTzwizLuxnpQZFhDEjGgONgGJSi92yf8eh0STSLGrWjT8+nw/Dw6RSWQAZviEyRtJ52WdFHIsQEAU81N5NpCr7rDPr9GHFU8sdo8Lp3fQntOIvyjpIzKUXWyp+QVJAh6GMw2Fn16S+Jg127wIDAQAB"
 
-func InitDB(m *testing.M) {
+func InitDB(t *testing.M) {
 	rand.Seed(time.Now().UTC().UnixNano())
+	TESTDBNAME := "transfermeit_test"
 
 	// initialise db
-	db, err := DBConn(os.Getenv("test_db_host") + "/?multiStatements=True&loc=" + time.Local.String())
+	db, err := DBConn(os.Getenv("db") + "/?multiStatements=True&loc=" + time.Local.String())
 	if err != nil {
 		panic(err.Error())
 	}
 	defer db.Close()
 
-	schema, _ := ioutil.ReadFile("sql/schema.sql")
-	_, err = db.Exec(`DROP DATABASE IF EXISTS transfermeit_test; 
-	CREATE DATABASE transfermeit_test;
-	USE transfermeit_test; ` + string(schema))
+	_, err = db.Exec(fmt.Sprintf(`DROP DATABASE IF EXISTS %[1]v; 
+	CREATE DATABASE %[1]v;`, TESTDBNAME))
 	if err != nil {
-		panic(err.Error())
+		panic(err)
+	}
+	db.Close()
+
+	// apply patches
+	dbConnStr := os.Getenv("db") + "/" + TESTDBNAME
+	m, err := migrate.New("file://sql/", "mysql://"+dbConnStr)
+	if err != nil {
+		panic(err)
 	}
 
-	db, err = DBConn(os.Getenv("db") + "?parseTime=true&loc=" + time.Local.String())
+	// test up and down commands work
+	if err := m.Up(); err != nil {
+		panic(err)
+	}
+	if err := m.Down(); err != nil {
+		panic(err)
+	}
+	if err := m.Up(); err != nil {
+		panic(err)
+	}
+
+	db, err = DBConn(dbConnStr + "?parseTime=true&loc=" + time.Local.String())
 	s = Server{db: db}
 
-	code := m.Run() // RUN THE TEST
+	code := t.Run() // RUN THE TEST
 
 	os.Exit(code)
 }
