@@ -92,11 +92,25 @@ func CreditToBandwidth(credit float64) (bytes int) {
 	return
 }
 
-func WriteError(w http.ResponseWriter, code int, message string) {
-	w.WriteHeader(code)
-	log.Println("http error: " + message)
-	_, err := w.Write([]byte(message))
-	Handle(err)
+func writeError(w http.ResponseWriter, r *http.Request, code int, message string) {
+	// find where this function has been called from
+	pc, _, line, _ := runtime.Caller(1)
+	details := runtime.FuncForPC(pc)
+	calledFrom := fmt.Sprintf("%s line:%d", details.Name(), line)
+
+	log.Printf("HTTP error: message: %s code: %d from:%s \n", message, code, calledFrom)
+
+	// log to sentry
+	if hub := sentry.GetHubFromContext(r.Context()); hub != nil {
+		hub.WithScope(func(scope *sentry.Scope) {
+			scope.SetExtra("Called From", calledFrom)
+			scope.SetExtra("code", code)
+			hub.CaptureMessage(message)
+		})
+	}
+
+	http.Error(w, message, code)
+	w.Write([]byte(message))
 }
 
 func SendSocketMessage(message SocketMessage, UUID string, storeOnFail bool) bool {
