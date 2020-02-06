@@ -25,7 +25,10 @@ jobs:
             ${{ runner.os }}-go-
 
       - name: Test
-        run: session_key=UH9ax500yN4mnTO60WLY2ae943tsqzFw test_db_host="root:root@" db="root:root@/transfermeit_test" go test -v
+        env:
+          session_key: "UH9ax500yN4mnTO60WLY2ae943tsqzFw"
+          db: "root:root@"
+        run: go test -v
 
   deploy:
     name: Deploy
