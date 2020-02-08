@@ -191,16 +191,18 @@ func GetAllDisplayTransfers(db *sql.DB) []DisplayTransfer {
 		defer rows.Close()
 		Handle(err)
 		for rows.Next() {
-			var u DisplayTransfer
-			var fs int
-			var updated mysql.NullTime
-			var finished mysql.NullTime
-			err = rows.Scan(&u.FromUUID, &u.ToUUID, &u.FileExpiry, &fs, &u.FileHash, &u.Failed, &updated, &finished)
+			var (
+				dt       DisplayTransfer
+				fileSize int
+				updated  mysql.NullTime
+				finished mysql.NullTime
+			)
+			err = rows.Scan(&dt.FromUUID, &dt.ToUUID, &dt.FileExpiry, &fileSize, &dt.FileHash, &dt.Failed, &updated, &finished)
 			Handle(err)
-			u.Downloading = updated.Valid
-			u.Finished = finished.Valid
-			u.FileSize = BytesToReadable(fs)
-			transfers = append(transfers, u)
+			dt.Downloading = updated.Valid
+			dt.Finished = finished.Valid
+			dt.FileSize = BytesToReadable(fileSize)
+			transfers = append(transfers, dt)
 		}
 		c.Set("transfers", transfers, cache.DefaultExpiration)
 	}

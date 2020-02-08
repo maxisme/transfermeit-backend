@@ -28,14 +28,28 @@ var (
 
 func Handle(err error) {
 	if err != nil {
-		pc, _, _, _ := runtime.Caller(1)
+		pc, _, ln, _ := runtime.Caller(1)
 		details := runtime.FuncForPC(pc)
-		log.Println("Fatal: " + err.Error() + " - " + details.Name())
+		log.Printf("Fatal: %s - %s %d", err.Error(), details.Name(), ln)
 
 		// log to sentry
 		sentry.CaptureException(err)
 		sentry.Flush(time.Second * 5)
 	}
+}
+
+func UpdateErr(res sql.Result, err error) error {
+	Handle(err)
+	if err != nil {
+		return err
+	}
+
+	rowsEffected, err := res.RowsAffected()
+	Handle(err)
+	if rowsEffected == 0 {
+		return errors.New("no rows effected")
+	}
+	return err
 }
 
 func RandomString(n int) string {
@@ -104,7 +118,7 @@ func writeError(w http.ResponseWriter, r *http.Request, code int, message string
 	if hub := sentry.GetHubFromContext(r.Context()); hub != nil {
 		hub.WithScope(func(scope *sentry.Scope) {
 			scope.SetExtra("Called From", calledFrom)
-			scope.SetExtra("code", code)
+			scope.SetExtra("Header Code", code)
 			hub.CaptureMessage(message)
 		})
 	}
@@ -116,9 +130,9 @@ func writeError(w http.ResponseWriter, r *http.Request, code int, message string
 func SendSocketMessage(message SocketMessage, UUID string, storeOnFail bool) bool {
 	hashUUID := Hash(UUID)
 
-	ClientsMutex.RLock()
-	socket, ok := Clients[hashUUID]
-	ClientsMutex.RUnlock()
+	WSClientsMutex.RLock()
+	socket, ok := WSClients[hashUUID]
+	WSClientsMutex.RUnlock()
 
 	if ok {
 		jsonReply, err := json.Marshal(message)
@@ -151,20 +165,6 @@ func InitSession(r *http.Request) *sessions.Session {
 	appSession = session
 	Handle(err)
 	return session
-}
-
-func UpdateErr(res sql.Result, err error) error {
-	Handle(err)
-	if err != nil {
-		return err
-	}
-
-	rowsEffected, err := res.RowsAffected()
-	Handle(err)
-	if rowsEffected == 0 {
-		return errors.New("no rows effected")
-	}
-	return err
 }
 
 func BytesToReadable(bytes int) string {

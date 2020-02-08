@@ -8,23 +8,22 @@ import (
 	"time"
 )
 
-var CODELEN = 7
-var UUIDKEYLEN = 200
-var (
-	DEFAULTMIN = 10
-	MAXMINS    = 60
+const CodeLen = 7
+const UUIDKeyLen = 200
+const (
+	DefaultAccountLifeMins = 10
+	MaxAccountLifeMins     = 60
 )
-var (
-	FREEUSER = 0
-	PAIDUSER = 1
-	PERMUSER = 2
-	CODEUSER = 3
+const (
+	FreeUserTier       = 0
+	PaidUserTier       = 1
+	PermUserTier       = 2
+	CustomCodeUserTier = 3
 )
 
-//£ user has of credit
-var (
-	PERMCRED = 5.0
-	CODECRED = 10.0
+const (
+	PermCodeCredit   = 5.0  // once user has this much credit they will have PermUserTier
+	CustomCodeCredit = 10.0 // once user has this much credit they will have CustomCodeUserTier
 )
 
 type User struct {
@@ -65,25 +64,25 @@ func SetUserUUIDKey(db *sql.DB, user User) {
 
 func SetUserTier(db *sql.DB, user *User) {
 	SetUserCredit(db, user)
-	user.Tier = FREEUSER
-	if user.Credit >= CODECRED {
-		user.Tier = CODEUSER
-	} else if user.Credit >= PERMCRED {
-		user.Tier = PERMUSER
+	user.Tier = FreeUserTier
+	if user.Credit >= CustomCodeCredit {
+		user.Tier = CustomCodeUserTier
+	} else if user.Credit >= PermCodeCredit {
+		user.Tier = PermUserTier
 	} else if user.Credit > 0 {
-		user.Tier = PAIDUSER
+		user.Tier = PaidUserTier
 	}
 }
 
 func SetUserMinsAllowed(user *User) {
-	if user.Tier == CODEUSER {
+	if user.Tier == CustomCodeUserTier {
 		user.MinsAllowed = 60
-	} else if user.Tier == PERMUSER {
+	} else if user.Tier == PermUserTier {
 		user.MinsAllowed = 30
-	} else if user.Tier == PAIDUSER {
+	} else if user.Tier == PaidUserTier {
 		user.MinsAllowed = 20
 	}
-	user.MinsAllowed = DEFAULTMIN
+	user.MinsAllowed = DefaultAccountLifeMins
 }
 
 func purgeCode(db *sql.DB, user User) {
@@ -167,7 +166,7 @@ func SetUserCodeExpiry(db *sql.DB, user *User) {
 }
 
 func CodeToUser(db *sql.DB, code string) (user User) {
-	if len(code) != CODELEN {
+	if len(code) != CodeLen {
 		return
 	}
 	result := db.QueryRow(`SELECT UUID, public_key
@@ -206,7 +205,7 @@ func GenUserCode(db *sql.DB) string {
 	var letters = []rune("ABCDEFGHJKMNPQRSTUVWXYZ23456789")
 
 	for {
-		b := make([]rune, CODELEN)
+		b := make([]rune, CodeLen)
 		for i := range b {
 			b[i] = letters[rand.Intn(len(letters))]
 		}

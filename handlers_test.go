@@ -132,13 +132,12 @@ func TestUploadDownloadCycle(t *testing.T) {
 
 	// create a file
 	fileSize := MegabytesToBytes(10)
-	encryptedFileSize := int64(fileSize)
 	f, _ := os.Create("foo.bar")
 	defer f.Close()
 	defer os.Remove("foo.bar")
-	_ = f.Truncate(encryptedFileSize)
+	_ = f.Truncate(int64(fileSize))
 
-	// initial upload to tell
+	// initial upload handler
 	initUploadR := InitUpload(form1, user1, user2, fileSize)
 	if initUploadR.Code != 200 {
 		t.Errorf("Got %v (%v) expected %v", initUploadR.Code, initUploadR.Body, 200)
@@ -146,7 +145,7 @@ func TestUploadDownloadCycle(t *testing.T) {
 		t.Errorf("Got '%v' expected '%v'", initUploadR.Body, b64PubKey)
 	}
 
-	// file upload
+	// actual file upload handler
 	password := RandomString(10)
 	uploadR := UploadFile(f, initUploadR.Header().Get("Set-Cookie"), password)
 	if uploadR.Code != 200 {
@@ -169,9 +168,9 @@ func TestUploadDownloadCycle(t *testing.T) {
 	form2.Set("UUID_key", user2.UUIDKey)
 	form2.Set("file_path", filePath)
 	rr := PostRequest(form2, http.HandlerFunc(s.DownloadHandler))
-	if rr.Code != 200 || len(rr.Body.Bytes()) != int(encryptedFileSize) {
+	if rr.Code != 200 || len(rr.Body.Bytes()) != fileSize {
 		t.Errorf("Got %v expected %v", uploadR.Code, 200)
-		t.Errorf("Got %v expected %v", len(rr.Body.Bytes()), encryptedFileSize)
+		t.Errorf("Got %v expected %v", len(rr.Body.Bytes()), fileSize)
 	}
 
 	// get file hash
@@ -204,7 +203,7 @@ func TestUploadDownloadCycle(t *testing.T) {
 func TestCodeTimeout(t *testing.T) {
 	user, form := GenUser()
 
-	var secondHang = 3
+	const secondHang = 3
 	time.Sleep(time.Second * time.Duration(secondHang))
 
 	_, _, ws, _ := ConnectWSS(user, form)
@@ -216,7 +215,7 @@ func TestCodeTimeout(t *testing.T) {
 	message := ReadSocketMessage(ws)
 
 	secondsLeft := math.Floor(message.User.Expiry.Sub(time.Now()).Seconds())
-	estimatedSecondsLeft := DEFAULTMIN*60 - secondHang
+	estimatedSecondsLeft := DefaultAccountLifeMins*60 - secondHang
 
 	if estimatedSecondsLeft != int(secondsLeft) && estimatedSecondsLeft-1 != int(secondsLeft) {
 		t.Errorf("Got %v expected %v", secondsLeft, estimatedSecondsLeft)
@@ -224,7 +223,7 @@ func TestCodeTimeout(t *testing.T) {
 }
 
 func TestPermCode(t *testing.T) {
-	_, form := GenCreditUser(PERMCRED)
+	_, form := GenCreditUser(PermCodeCredit)
 
 	// toggle on perm code
 	rr := PostRequest(form, http.HandlerFunc(s.TogglePermCodeHandler))
@@ -280,7 +279,7 @@ func TestCustomCode(t *testing.T) {
 	var customCode = GenUserCode(s.db)
 	var user User
 
-	_, form := GenCreditUser(CODECRED)
+	_, form := GenCreditUser(CustomCodeCredit)
 
 	// set a custom code
 	form.Set("custom_code", customCode)

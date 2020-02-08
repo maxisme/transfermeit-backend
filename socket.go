@@ -47,9 +47,9 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	wsconn, _ := Upgrader.Upgrade(w, r, nil)
 
 	// add web socket connection to list of clients
-	ClientsMutex.Lock()
-	Clients[Hash(user.UUID)] = wsconn
-	ClientsMutex.Unlock()
+	WSClientsMutex.Lock()
+	WSClients[Hash(user.UUID)] = wsconn
+	WSClientsMutex.Unlock()
 
 	// mark user as connected in db
 	go UserSocketConnected(s.db, r.Header.Get("UUID"), true)
@@ -64,7 +64,7 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 			SendSocketMessage(message, Hash(user.UUID), false)
 		}
 
-		// delete any pending messages
+		// delete any pending socket messages
 		PendingSocketMutex.Lock()
 		delete(PendingSocketMessages, Hash(user.UUID))
 		PendingSocketMutex.Unlock()
@@ -94,7 +94,7 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	go UserSocketConnected(s.db, r.Header.Get("UUID"), false)
 
 	// remove client from clients
-	ClientsMutex.Lock()
-	delete(Clients, user.UUID)
-	ClientsMutex.Unlock()
+	WSClientsMutex.Lock()
+	delete(WSClients, user.UUID)
+	WSClientsMutex.Unlock()
 }

@@ -17,8 +17,8 @@ import (
 )
 
 var (
-	Clients      = make(map[string]*websocket.Conn)
-	ClientsMutex = sync.RWMutex{}
+	WSClients      = make(map[string]*websocket.Conn)
+	WSClientsMutex = sync.RWMutex{}
 )
 
 var Upgrader = websocket.Upgrader{
@@ -63,10 +63,10 @@ func (s *Server) TogglePermCodeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	SetUserTier(s.db, &user)
-	if user.Tier >= PERMUSER {
+	if user.Tier >= PermUserTier {
 		permCode, customCode := GetUserPermCode(s.db, user)
 		if permCode.Valid || customCode.Valid {
-			// toggle off any stored codes (INCLUDING custom code)
+			// remove any stored codes (INCLUDING custom code)
 			err := RemovePermCodes(s.db, user)
 			Handle(err)
 		} else {
@@ -91,6 +91,7 @@ func (s *Server) CustomCodeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// fetch form
 	if err := r.ParseForm(); err != nil {
+		Handle(err)
 		writeError(w, r, 400, "Invalid form data")
 		return
 	}
@@ -107,13 +108,13 @@ func (s *Server) CustomCodeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user.Code = r.Form.Get("custom_code")
-	if len(user.Code) != CODELEN {
+	if len(user.Code) != CodeLen {
 		writeError(w, r, 401, "Invalid custom code")
 		return
 	}
 
 	SetUserTier(s.db, &user)
-	if user.Tier >= CODEUSER {
+	if user.Tier >= CustomCodeUserTier {
 		if err := SetCustomCode(s.db, user); err == nil {
 			jsonReply, _ := json.Marshal(user)
 			_, _ = w.Write(jsonReply)
@@ -133,6 +134,7 @@ func (s *Server) RegisterCreditHandler(w http.ResponseWriter, r *http.Request) {
 
 	// fetch form
 	if err := r.ParseForm(); err != nil {
+		Handle(err)
 		writeError(w, r, 400, "Invalid form data")
 		return
 	}
@@ -192,8 +194,8 @@ func (s *Server) CredentialHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	wantedMins, err := strconv.Atoi(r.Form.Get("wanted_mins")) // convert to int
-	if err != nil || wantedMins <= 0 || wantedMins%5 != 0 || wantedMins > MAXMINS {
-		wantedMins = DEFAULTMIN
+	if err != nil || wantedMins <= 0 || wantedMins%5 != 0 || wantedMins > MaxAccountLifeMins {
+		wantedMins = DefaultAccountLifeMins
 	}
 
 	user.Code = GenUserCode(s.db)
@@ -205,11 +207,11 @@ func (s *Server) CredentialHandler(w http.ResponseWriter, r *http.Request) {
 	} else if !userExists {
 		log.Println("Creating new user " + user.UUID)
 		// create new tmi user
-		user.UUIDKey = RandomString(UUIDKEYLEN)
+		user.UUIDKey = RandomString(UUIDKeyLen)
 		user.MaxFileSize = FreeFileUploadBytes
 		user.Bandwidth = FreeBandwidthBytes
-		user.MinsAllowed = DEFAULTMIN
-		user.WantedMins = DEFAULTMIN
+		user.MinsAllowed = DefaultAccountLifeMins
+		user.WantedMins = DefaultAccountLifeMins
 		user.Expiry = time.Now().Add(time.Minute * time.Duration(wantedMins)).UTC()
 		go CreateNewUser(s.db, user)
 	} else {
@@ -217,7 +219,7 @@ func (s *Server) CredentialHandler(w http.ResponseWriter, r *http.Request) {
 			// if key has been removed from db because of lost UUID key from client
 			log.Println("Resetting UUID key for " + user.UUID)
 
-			user.UUIDKey = RandomString(UUIDKEYLEN)
+			user.UUIDKey = RandomString(UUIDKeyLen)
 			go SetUserUUIDKey(s.db, user)
 		} else {
 			user.UUIDKey = ""
@@ -232,7 +234,7 @@ func (s *Server) CredentialHandler(w http.ResponseWriter, r *http.Request) {
 		SetUserStats(s.db, &user)
 
 		if wantedMins > user.MinsAllowed {
-			wantedMins = DEFAULTMIN
+			wantedMins = DefaultAccountLifeMins
 		}
 		user.WantedMins = wantedMins
 
@@ -257,6 +259,7 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	// fetch form
 	if err := r.ParseForm(); err != nil {
+		Handle(err)
 		writeError(w, r, 400, "Invalid form data")
 		return
 	}
@@ -362,6 +365,7 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	// get POST data
 	if err := r.ParseForm(); err != nil {
+		Handle(err)
 		writeError(w, r, 400, "Invalid form data")
 		return
 	}
@@ -417,6 +421,7 @@ func (s *Server) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 
 	// fetch form
 	if err := r.ParseForm(); err != nil {
+		Handle(err)
 		writeError(w, r, 400, "Invalid form data")
 		return
 	}
@@ -468,6 +473,7 @@ func (s *Server) CompletedDownloadHandler(w http.ResponseWriter, r *http.Request
 
 	// fetch form
 	if err := r.ParseForm(); err != nil {
+		Handle(err)
 		writeError(w, r, 400, "Invalid form data")
 		return
 	}
