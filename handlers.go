@@ -31,7 +31,6 @@ const UploadSessionName = "upload"
 func SecKeyHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Sec-Key") != os.Getenv("server_key") {
-			println(r.Header.Get("Sec-Key"))
 			writeError(w, r, 400, "Invalid form data")
 			return
 		}
@@ -73,12 +72,13 @@ func (s *Server) TogglePermCodeHandler(w http.ResponseWriter, r *http.Request) {
 			// turn on random perm code
 			user.Code = GenUserCode(s.db)
 			if err := SetPermCode(s.db, user); err != nil {
-				Handle(err)
 				writeError(w, r, 401, "Failed to set permanent code")
 				return
 			}
 		}
 	}
+
+	w.Header().Set("Content-Type", "application/json")
 	jsonReply, _ := json.Marshal(user)
 	_, _ = w.Write(jsonReply)
 }
@@ -91,7 +91,6 @@ func (s *Server) CustomCodeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// fetch form
 	if err := r.ParseForm(); err != nil {
-		Handle(err)
 		writeError(w, r, 400, "Invalid form data")
 		return
 	}
@@ -102,7 +101,6 @@ func (s *Server) CustomCodeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !IsValidUserCredentials(s.db, user) {
-		log.Println("Invalid credentials")
 		writeError(w, r, 400, "Invalid form data")
 		return
 	}
@@ -116,8 +114,11 @@ func (s *Server) CustomCodeHandler(w http.ResponseWriter, r *http.Request) {
 	SetUserTier(s.db, &user)
 	if user.Tier >= CustomCodeUserTier {
 		if err := SetCustomCode(s.db, user); err == nil {
-			jsonReply, _ := json.Marshal(user)
-			_, _ = w.Write(jsonReply)
+			jsonReply, err := json.Marshal(user)
+			Handle(err)
+			w.Header().Set("Content-Type", "application/json")
+			_, err = w.Write(jsonReply)
+			Handle(err)
 			return
 		} else {
 			Handle(err)
@@ -134,7 +135,6 @@ func (s *Server) RegisterCreditHandler(w http.ResponseWriter, r *http.Request) {
 
 	// fetch form
 	if err := r.ParseForm(); err != nil {
-		Handle(err)
 		writeError(w, r, 400, "Invalid form data")
 		return
 	}
@@ -145,7 +145,6 @@ func (s *Server) RegisterCreditHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !IsValidUserCredentials(s.db, user) {
-		log.Println("Invalid credentials")
 		writeError(w, r, 400, "Invalid form data")
 		return
 	}
@@ -153,7 +152,6 @@ func (s *Server) RegisterCreditHandler(w http.ResponseWriter, r *http.Request) {
 	creditCode := r.Form.Get("credit_code")
 	if len(creditCode) == CREDITCODELEN {
 		if err := SetCreditCode(s.db, user, creditCode); err != nil {
-			Handle(err)
 			writeError(w, r, 401, "Failed to register credit")
 			return
 		}
@@ -168,7 +166,6 @@ func (s *Server) CredentialHandler(w http.ResponseWriter, r *http.Request) {
 
 	// fetch form
 	if err := r.ParseForm(); err != nil {
-		Handle(err)
 		writeError(w, r, 400, "Invalid form data")
 		return
 	}
@@ -242,8 +239,10 @@ func (s *Server) CredentialHandler(w http.ResponseWriter, r *http.Request) {
 		go UpdateUser(s.db, user)
 	}
 
+	// return json of user
 	jsonReply, err := json.Marshal(user)
 	Handle(err)
+	w.Header().Set("Content-Type", "application/json")
 	_, err = w.Write(jsonReply)
 	Handle(err)
 }
@@ -259,14 +258,12 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	// fetch form
 	if err := r.ParseForm(); err != nil {
-		Handle(err)
 		writeError(w, r, 400, "Invalid form data")
 		return
 	}
 
 	filesize, err := strconv.Atoi(r.Form.Get("filesize"))
 	if err != nil {
-		Handle(err)
 		writeError(w, r, 401, "Invalid value for filesize")
 		return
 	}
@@ -277,7 +274,6 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !IsValidUserCredentials(s.db, user) {
-		log.Println("Invalid credentials")
 		writeError(w, r, 400, "Method not allowed")
 		return
 	}
@@ -323,9 +319,9 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	transfer.ID = InsertTransfer(s.db, transfer)
-	transfer.from.UUID = "" // for privacy
+	transfer.from.UUID = "" // for privacy remove the UUID
 
-	// store transfer information in session
+	// store transfer information in session to be picked up by UploadHandler
 	session := InitSession(r)
 	gob.Register(Transfer{})
 	session.Values[UploadSessionName] = transfer
@@ -345,10 +341,6 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	// get session transfer
 	session := InitSession(r)
-	if session.Values[UploadSessionName] == nil {
-		writeError(w, r, 401, "Init transfer not run")
-		return
-	}
 	sessionTransfer := session.Values[UploadSessionName].(Transfer)
 	if sessionTransfer.ID == 0 {
 		writeError(w, r, 401, "Init transfer not run")
@@ -375,13 +367,13 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	// get file from form
 	file, handler, err := r.FormFile("file")
-	defer file.Close()
 	Handle(err)
+	defer file.Close()
 
 	// verify session data from InitUploadHandler against actual file Size
 	// should be less than expected as it should have been compressed since.
 	if int(handler.Size) > sessionTransfer.Size {
-		m := fmt.Sprintf("You lied about the transfer Size expected %v got %v!", sessionTransfer.Size, int(handler.Size))
+		m := fmt.Sprintf("You lied about the transfer size expected %v got %v!", sessionTransfer.Size, int(handler.Size))
 		writeError(w, r, 401, m)
 		return
 	}
@@ -398,16 +390,16 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	err = ioutil.WriteFile(fileLocation, fileBytes, 0744)
 	Handle(err)
 
-	// initialise transfer
+	// write full details in transfer struct
 	transfer := sessionTransfer
 	transfer.FilePath = strings.Replace(fileLocation, FILEDIR, "", -1)
 	transfer.expiry = time.Now().Add(time.Minute * time.Duration(sessionTransfer.from.WantedMins))
 	transfer.hash = HashBytes(fileBytes)
 	transfer.Size = int(handler.Size)
 
-	err = UpdateTransfer(s.db, transfer)
-	Handle(err)
+	Handle(UpdateTransfer(s.db, transfer))
 
+	// tell friend to download file
 	SendSocketMessage(SocketMessage{
 		Download: &transfer,
 	}, transfer.to.UUID, true)
