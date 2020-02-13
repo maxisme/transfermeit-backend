@@ -223,7 +223,7 @@ func TestCodeTimeout(t *testing.T) {
 }
 
 func TestPermCode(t *testing.T) {
-	_, form := GenCreditUser(PermCodeCredit)
+	_, form := GenCreditUser(PermCodeCreditAmt)
 
 	// toggle on perm code
 	rr := PostRequest(form, http.HandlerFunc(s.TogglePermCodeHandler))
@@ -279,7 +279,7 @@ func TestCustomCode(t *testing.T) {
 	var customCode = GenUserCode(s.db)
 	var user User
 
-	_, form := GenCreditUser(CustomCodeCredit)
+	_, form := GenCreditUser(CustomCodeCreditAmt)
 
 	// set a custom code
 	form.Set("custom_code", customCode)

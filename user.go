@@ -22,8 +22,8 @@ const (
 )
 
 const (
-	PermCodeCredit   = 5.0  // once user has this much credit they will have PermUserTier
-	CustomCodeCredit = 10.0 // once user has this much credit they will have CustomCodeUserTier
+	PermCodeCreditAmt   = 5.0  // once user has this much credit they will have PermUserTier
+	CustomCodeCreditAmt = 10.0 // once user has this much credit they will have CustomCodeUserTier
 )
 
 type User struct {
@@ -65,9 +65,9 @@ func SetUserUUIDKey(db *sql.DB, user User) {
 func SetUserTier(db *sql.DB, user *User) {
 	SetUserCredit(db, user)
 	user.Tier = FreeUserTier
-	if user.Credit >= CustomCodeCredit {
+	if user.Credit >= CustomCodeCreditAmt {
 		user.Tier = CustomCodeUserTier
-	} else if user.Credit >= PermCodeCredit {
+	} else if user.Credit >= PermCodeCreditAmt {
 		user.Tier = PermUserTier
 	} else if user.Credit > 0 {
 		user.Tier = PaidUserTier
