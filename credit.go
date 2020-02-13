@@ -4,9 +4,10 @@ import (
 	"database/sql"
 )
 
-var CREDITCODELEN = 100
+// CreditCodeLen is the length of the randomly generated code to be used to activate credit on a users account
+const CreditCodeLen = 100
 
-// set the users perm code as long as it is what they are expecting
+// SetUsersPermCode sets the users perm code as long as it matches what they have passed
 func SetUsersPermCode(db *sql.DB, user *User, expectedPermCode string) {
 	permCode, customCode := GetUserPermCode(db, *user)
 	var code string
@@ -20,16 +21,18 @@ func SetUsersPermCode(db *sql.DB, user *User, expectedPermCode string) {
 	}
 }
 
+// GetUserPermCode requests a users perm code if they have one
 func GetUserPermCode(db *sql.DB, user User) (permCode sql.NullString, customCode sql.NullString) {
 	result := db.QueryRow(`
 	SELECT perm_user_code, custom_user_code
 	FROM credit
 	WHERE UUID = ?
 	LIMIT 1`, Hash(user.UUID))
-	_ = result.Scan(&permCode, &customCode)
+	Handle(result.Scan(&permCode, &customCode))
 	return
 }
 
+// RemovePermCodes will remove the users stored perm code
 func RemovePermCodes(db *sql.DB, user User) error {
 	return UpdateErr(db.Exec(`
 	UPDATE credit
@@ -37,20 +40,23 @@ func RemovePermCodes(db *sql.DB, user User) error {
 	WHERE UUID=?`, Hash(user.UUID)))
 }
 
-func SetCustomCode(db *sql.DB, user User) error {
+// SetCustomCode sets a permanent custom code for a user
+func SetCustomCode(db *sql.DB, code string, user User) error {
 	return UpdateErr(db.Exec(`
 	UPDATE credit
 	SET custom_user_code=?
-	WHERE UUID=?`, user.Code, Hash(user.UUID)))
+	WHERE UUID=?`, code, Hash(user.UUID)))
 }
 
-func SetPermCode(db *sql.DB, user User) error {
+// SetPermCode sets a permanent code for a user
+func SetPermCode(db *sql.DB, code string, user User) error {
 	return UpdateErr(db.Exec(`
 	UPDATE credit
 	SET perm_user_code=?
-	WHERE UUID=?`, user.Code, Hash(user.UUID)))
+	WHERE UUID=?`, code, Hash(user.UUID)))
 }
 
+// SetCreditCode associates a credit code to an account
 func SetCreditCode(db *sql.DB, user User, activationCode string) error {
 	return UpdateErr(db.Exec(`
 	UPDATE credit
@@ -59,6 +65,7 @@ func SetCreditCode(db *sql.DB, user User, activationCode string) error {
 	AND UUID IS NULL`, Hash(user.UUID), activationCode))
 }
 
+// SetUserCredit sets the amount of credit the user has linked to their account
 func SetUserCredit(db *sql.DB, user *User) {
 	if user.Credit > 0 {
 		// already set the users credit
