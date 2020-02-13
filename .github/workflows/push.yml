@@ -3,11 +3,11 @@ on: [push]
 
 jobs:
   test:
-    name: Test with version
+    name: Test with go version
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go: ['1.12', '1.13']
+        go: ['1.12', '1.13', '1.14']
     steps:
       - uses: actions/checkout@master
 
@@ -28,7 +28,11 @@ jobs:
         env:
           session_key: "UH9ax500yN4mnTO60WLY2ae943tsqzFw"
           db: "root:root@"
-        run: go test -v
+        run: go test ./... -v -covermode=count -coverprofile=coverage.out
+  
+      - uses: codecov/codecov-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   deploy:
     name: Deploy
