@@ -19,12 +19,12 @@ import (
 var (
 	WSClients      = make(map[string]*websocket.Conn)
 	WSClientsMutex = sync.RWMutex{}
-)
 
-var Upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-}
+	Upgrader = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+	}
+)
 
 const UploadSessionName = "upload"
 
@@ -70,8 +70,8 @@ func (s *Server) TogglePermCodeHandler(w http.ResponseWriter, r *http.Request) {
 			Handle(err)
 		} else {
 			// turn on random perm code
-			user.Code = GenUserCode(s.db)
-			if err := SetPermCode(s.db, user); err != nil {
+			permCode := GenUserCode(s.db)
+			if err := SetPermCode(s.db, permCode, user); err != nil {
 				writeError(w, r, 401, "Failed to set permanent code")
 				return
 			}
@@ -105,15 +105,15 @@ func (s *Server) CustomCodeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user.Code = r.Form.Get("custom_code")
-	if len(user.Code) != CodeLen {
+	customCode := r.Form.Get("custom_code")
+	if len(customCode) != CodeLen {
 		writeError(w, r, 401, "Invalid custom code")
 		return
 	}
 
 	SetUserTier(s.db, &user)
 	if user.Tier >= CustomCodeUserTier {
-		if err := SetCustomCode(s.db, user); err == nil {
+		if err := SetCustomCode(s.db, customCode, user); err == nil {
 			jsonReply, err := json.Marshal(user)
 			Handle(err)
 			w.Header().Set("Content-Type", "application/json")
@@ -150,7 +150,7 @@ func (s *Server) RegisterCreditHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	creditCode := r.Form.Get("credit_code")
-	if len(creditCode) == CREDITCODELEN {
+	if len(creditCode) == CreditCodeLen {
 		if err := SetCreditCode(s.db, user, creditCode); err != nil {
 			writeError(w, r, 401, "Failed to register credit")
 			return

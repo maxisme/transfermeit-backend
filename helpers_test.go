@@ -94,7 +94,7 @@ func GenUser() (user User, form url.Values) {
 func GenCreditUser(credit float64) (user User, form url.Values) {
 	user, form = GenUser()
 
-	creditCode := RandomString(CREDITCODELEN)
+	creditCode := RandomString(CreditCodeLen)
 	GenerateProCredit(creditCode, credit)
 
 	form.Set("UUID_key", user.UUIDKey)
