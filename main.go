@@ -22,7 +22,7 @@ var lmt = tollbooth.NewLimiter(1, &limiter.ExpirableOptions{DefaultExpirationTTL
 func secKeyHandlerWrapper(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Sec-Key") != os.Getenv("server_key") {
-			writeError(w, r, 400, "Invalid form data")
+			WriteError(w, r, 400, "Invalid form data")
 			return
 		}
 		next.ServeHTTP(w, r)

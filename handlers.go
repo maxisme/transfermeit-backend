@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/gob"
-	"encoding/json"
 	"fmt"
 	"github.com/gorilla/websocket"
 	"io"
@@ -31,13 +30,13 @@ const uploadSessionName = "upload"
 // TogglePermCodeHandler either turns on or off a users perm code depending if they have one already
 func (s *Server) TogglePermCodeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
-		writeError(w, r, 400, "Invalid method")
+		WriteError(w, r, 400, "Invalid method")
 		return
 	}
 
 	// fetch post data
 	if err := r.ParseForm(); err != nil {
-		writeError(w, r, 400, "Invalid form data")
+		WriteError(w, r, 400, "Invalid form data")
 		return
 	}
 
@@ -48,7 +47,7 @@ func (s *Server) TogglePermCodeHandler(w http.ResponseWriter, r *http.Request) {
 
 	if !IsValidUserCredentials(s.db, user) {
 		log.Println("Invalid credentials")
-		writeError(w, r, 400, "Invalid form data")
+		WriteError(w, r, 400, "Invalid form data")
 		return
 	}
 
@@ -63,27 +62,25 @@ func (s *Server) TogglePermCodeHandler(w http.ResponseWriter, r *http.Request) {
 			// turn on random perm code
 			user.Code = GenUserCode(s.db)
 			if err := SetPermCode(s.db, user); err != nil {
-				writeError(w, r, 401, "Failed to set permanent code")
+				WriteError(w, r, 401, "Failed to set permanent code")
 				return
 			}
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	jsonReply, _ := json.Marshal(user)
-	_, _ = w.Write(jsonReply)
+	Handle(WriteJson(w, user))
 }
 
 // CustomCodeHandler sets a users custom code
 func (s *Server) CustomCodeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
-		writeError(w, r, 400, "Invalid method")
+		WriteError(w, r, 400, "Invalid method")
 		return
 	}
 
 	// fetch form
 	if err := r.ParseForm(); err != nil {
-		writeError(w, r, 400, "Invalid form data")
+		WriteError(w, r, 400, "Invalid form data")
 		return
 	}
 
@@ -93,42 +90,38 @@ func (s *Server) CustomCodeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !IsValidUserCredentials(s.db, user) {
-		writeError(w, r, 400, "Invalid form data")
+		WriteError(w, r, 400, "Invalid form data")
 		return
 	}
 
 	user.Code = r.Form.Get("custom_code")
 	if len(user.Code) != CodeLen {
-		writeError(w, r, 401, "Invalid custom code")
+		WriteError(w, r, 401, "Invalid custom code")
 		return
 	}
 
 	SetUserTier(s.db, &user)
 	if user.Tier >= CustomCodeUserTier {
-		if err := SetCustomCode(s.db, user); err == nil {
-			jsonReply, err := json.Marshal(user)
-			Handle(err)
-			w.Header().Set("Content-Type", "application/json")
-			_, err = w.Write(jsonReply)
-			Handle(err)
+		err := SetCustomCode(s.db, user)
+		if err == nil {
+			Handle(WriteJson(w, user))
 			return
-		} else {
-			Handle(err)
 		}
+		Handle(err)
 	}
-	writeError(w, r, 402, "Failed to set activation code")
+	WriteError(w, r, 402, "Failed to set activation code")
 }
 
 // RegisterCreditHandler will associate a credit code to an account
 func (s *Server) RegisterCreditHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
-		writeError(w, r, 400, "Invalid method")
+		WriteError(w, r, 400, "Invalid method")
 		return
 	}
 
 	// fetch form
 	if err := r.ParseForm(); err != nil {
-		writeError(w, r, 400, "Invalid form data")
+		WriteError(w, r, 400, "Invalid form data")
 		return
 	}
 
@@ -138,14 +131,14 @@ func (s *Server) RegisterCreditHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !IsValidUserCredentials(s.db, user) {
-		writeError(w, r, 400, "Invalid form data")
+		WriteError(w, r, 400, "Invalid form data")
 		return
 	}
 
 	creditCode := r.Form.Get("credit_code")
 	if len(creditCode) == CreditCodeLen {
 		if err := SetCreditCode(s.db, user, creditCode); err != nil {
-			writeError(w, r, 401, "Failed to register credit")
+			WriteError(w, r, 401, "Failed to register credit")
 			return
 		}
 	}
@@ -154,13 +147,13 @@ func (s *Server) RegisterCreditHandler(w http.ResponseWriter, r *http.Request) {
 // CreateCodeHandler creates an account and/or updates a users code
 func (s *Server) CreateCodeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
-		writeError(w, r, 400, "Invalid method")
+		WriteError(w, r, 400, "Invalid method")
 		return
 	}
 
 	// fetch form
 	if err := r.ParseForm(); err != nil {
-		writeError(w, r, 400, "Invalid form data")
+		WriteError(w, r, 400, "Invalid form data")
 		return
 	}
 
@@ -170,17 +163,17 @@ func (s *Server) CreateCodeHandler(w http.ResponseWriter, r *http.Request) {
 	user.PublicKey = r.Form.Get("public_key")
 
 	if user.UUID == "" {
-		writeError(w, r, 400, "Invalid form data")
+		WriteError(w, r, 400, "Invalid form data")
 		return
 	}
 
 	if user.PublicKey == "" {
-		writeError(w, r, 401, "Invalid form data")
+		WriteError(w, r, 401, "Invalid form data")
 		return
 	}
 
 	if !IsValidPublicKey(user.PublicKey) {
-		writeError(w, r, 401, "Invalid public key in keychain!")
+		WriteError(w, r, 401, "Invalid public key in keychain!")
 		return
 	}
 
@@ -193,7 +186,7 @@ func (s *Server) CreateCodeHandler(w http.ResponseWriter, r *http.Request) {
 	UUIDKey, userExists := GetUUIDKey(s.db, user)
 
 	if userExists && len(UUIDKey) > 0 && !IsValidUserCredentials(s.db, user) {
-		writeError(w, r, 402, "Invalid UUID key. Ask hello@transferme.it to reset")
+		WriteError(w, r, 402, "Invalid UUID key. Ask hello@transferme.it to reset")
 		return
 	} else if !userExists {
 		log.Println("Creating new user " + user.UUID)
@@ -233,31 +226,26 @@ func (s *Server) CreateCodeHandler(w http.ResponseWriter, r *http.Request) {
 		go UpdateUser(s.db, user)
 	}
 
-	// return json of user
-	jsonReply, err := json.Marshal(user)
-	Handle(err)
-	w.Header().Set("Content-Type", "application/json")
-	_, err = w.Write(jsonReply)
-	Handle(err)
+	Handle(WriteJson(w, user))
 }
 
 // InitUploadHandler tells the server what to suspect in the UploadHandler and handles most file upload validation.
 // This is done before so as to not have to wait for the file to be transferred to the server.
 func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
-		writeError(w, r, 400, "Invalid method")
+		WriteError(w, r, 400, "Invalid method")
 		return
 	}
 
 	// fetch form
 	if err := r.ParseForm(); err != nil {
-		writeError(w, r, 400, "Invalid form data")
+		WriteError(w, r, 400, "Invalid form data")
 		return
 	}
 
 	filesize, err := strconv.Atoi(r.Form.Get("filesize"))
 	if err != nil {
-		writeError(w, r, 401, "Invalid value for filesize")
+		WriteError(w, r, 401, "Invalid value for filesize")
 		return
 	}
 
@@ -267,19 +255,19 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !IsValidUserCredentials(s.db, user) {
-		writeError(w, r, 400, "Method not allowed")
+		WriteError(w, r, 400, "Method not allowed")
 		return
 	}
 
 	code := r.Form.Get("code")
 	friend := CodeToUser(s.db, code)
 	if friend.UUID == "" || friend.PublicKey == "" {
-		writeError(w, r, 401, "Your friend does not exist!")
+		WriteError(w, r, 401, "Your friend does not exist!")
 		return
 	}
 
 	if friend.UUID == Hash(user.UUID) {
-		writeError(w, r, 401, "Your can't send files to yourself!")
+		WriteError(w, r, 401, "Your can't send files to yourself!")
 		return
 	}
 
@@ -290,12 +278,12 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("transfer with %v difference", BytesToMegabytes(user.MaxFileSize-filesize))
 		mb := BytesToMegabytes(user.MaxFileSize)
 		m := fmt.Sprintf("This transfer exceeds your %fMB max file transfer Size!", mb)
-		writeError(w, r, 401, m)
+		WriteError(w, r, 401, m)
 		return
 	}
 	userBandwidthLeft := GetUserBandwidthLeft(s.db, &user)
 	if userBandwidthLeft-filesize < 0 {
-		writeError(w, r, 401, "This transfer exceeds today's bandwidth limit!")
+		WriteError(w, r, 401, "This transfer exceeds today's bandwidth limit!")
 		return
 	}
 
@@ -328,7 +316,7 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 // UploadHandler handles the file upload but only works after running InitUploadHandler
 func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
-		writeError(w, r, 400, "Invalid method")
+		WriteError(w, r, 400, "Invalid method")
 		return
 	}
 
@@ -336,7 +324,7 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	session := InitSession(r)
 	sessionTransfer := session.Values[uploadSessionName].(Transfer)
 	if sessionTransfer.ID == 0 {
-		writeError(w, r, 401, "Init transfer not run")
+		WriteError(w, r, 401, "Init transfer not run")
 		return
 	}
 
@@ -351,7 +339,7 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	// get POST data
 	if err := r.ParseForm(); err != nil {
 		Handle(err)
-		writeError(w, r, 400, "Invalid form data")
+		WriteError(w, r, 400, "Invalid form data")
 		return
 	}
 
@@ -367,7 +355,7 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	// should be less than expected as it should have been compressed since.
 	if int(handler.Size) > sessionTransfer.Size {
 		m := fmt.Sprintf("You lied about the transfer size expected %v got %v!", sessionTransfer.Size, int(handler.Size))
-		writeError(w, r, 401, m)
+		WriteError(w, r, 401, m)
 		return
 	}
 
@@ -401,14 +389,14 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 // DownloadHandler handles the download of the file
 func (s *Server) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
-		writeError(w, r, 400, "Invalid method")
+		WriteError(w, r, 400, "Invalid method")
 		return
 	}
 
 	// fetch form
 	if err := r.ParseForm(); err != nil {
 		Handle(err)
-		writeError(w, r, 400, "Invalid form data")
+		WriteError(w, r, 400, "Invalid form data")
 		return
 	}
 
@@ -420,26 +408,26 @@ func (s *Server) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 
 	if !IsValidUserCredentials(s.db, user) {
 		log.Println("Invalid credentials")
-		writeError(w, r, 400, "Invalid form data")
+		WriteError(w, r, 400, "Invalid form data")
 		return
 	}
 
 	filePath := r.Form.Get("file_path")
 	if !AllowedToDownloadPath(s.db, user, filePath) {
-		writeError(w, r, 401, "No such file at path!")
+		WriteError(w, r, 401, "No such file at path!")
 		return
 	}
 
 	f, err := os.Open(FILEDIR + filePath)
 	if err != nil {
 		Handle(err)
-		writeError(w, r, 401, err.Error())
+		WriteError(w, r, 401, err.Error())
 		return
 	}
 	fi, err := f.Stat()
 	if err != nil {
 		Handle(err)
-		writeError(w, r, 401, err.Error())
+		WriteError(w, r, 401, err.Error())
 		return
 	}
 
@@ -454,14 +442,14 @@ func (s *Server) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 // CompletedDownloadHandler fetches the encrypted password of the uploaded file if passed a valid file hash
 func (s *Server) CompletedDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
-		writeError(w, r, 400, "Invalid method")
+		WriteError(w, r, 400, "Invalid method")
 		return
 	}
 
 	// fetch form
 	if err := r.ParseForm(); err != nil {
 		Handle(err)
-		writeError(w, r, 400, "Invalid form data")
+		WriteError(w, r, 400, "Invalid form data")
 		return
 	}
 
@@ -471,7 +459,7 @@ func (s *Server) CompletedDownloadHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	if !IsValidUserCredentials(s.db, user) {
-		writeError(w, r, 400, "Invalid form data")
+		WriteError(w, r, 400, "Invalid form data")
 		return
 	}
 
@@ -487,7 +475,7 @@ func (s *Server) CompletedDownloadHandler(w http.ResponseWriter, r *http.Request
 		password, fromUUID := GetTransferPasswordAndUUID(s.db, transfer)
 		if password == "" || fromUUID == "" {
 			log.Println("No password for user. Or already uploading to user", transfer)
-			writeError(w, r, 402, "No password for user")
+			WriteError(w, r, 402, "No password for user")
 		} else {
 			transfer.from.UUID = fromUUID
 		}

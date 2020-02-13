@@ -23,13 +23,13 @@ type IncomingSocketMessage struct {
 
 func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
-		writeError(w, r, 400, "Method not allowed")
+		WriteError(w, r, 400, "Method not allowed")
 		return
 	}
 
 	// validate inputs
 	if !IsValidVersion(r.Header.Get("Version")) {
-		writeError(w, r, 400, "Invalid Version")
+		WriteError(w, r, 400, "Invalid Version")
 		return
 	}
 
@@ -39,7 +39,7 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !IsValidUserCredentials(s.db, user) {
-		writeError(w, r, 401, "Invalid credentials!")
+		WriteError(w, r, 401, "Invalid credentials!")
 		return
 	}
 

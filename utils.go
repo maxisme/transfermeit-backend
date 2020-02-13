@@ -106,7 +106,17 @@ func CreditToBandwidth(credit float64) (bytes int) {
 	return
 }
 
-func writeError(w http.ResponseWriter, r *http.Request, code int, message string) {
+func WriteJson(w http.ResponseWriter, v interface{}) error {
+	jsonReply, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, err = w.Write(jsonReply)
+	return err
+}
+
+func WriteError(w http.ResponseWriter, r *http.Request, code int, message string) {
 	// find where this function has been called from
 	pc, _, line, _ := runtime.Caller(1)
 	details := runtime.FuncForPC(pc)
