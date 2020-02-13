@@ -83,7 +83,7 @@ func GenUser() (user User, form url.Values) {
 	UUID, _ := uuid.NewRandom()
 	form.Set("UUID", UUID.String())
 	form.Set("public_key", b64PubKey)
-	rr := PostRequest(form, http.HandlerFunc(s.CredentialHandler))
+	rr := PostRequest(form, http.HandlerFunc(s.CreateCodeHandler))
 	if err := json.Unmarshal(rr.Body.Bytes(), &user); err != nil {
 		log.Fatal(err)
 	}

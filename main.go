@@ -69,7 +69,7 @@ func main() {
 	// HANDLERS
 	mux := http.NewServeMux()
 	mux.Handle("/ws", customCallback(s.WSHandler))
-	mux.Handle("/code", customCallback(s.CredentialHandler))
+	mux.Handle("/code", customCallback(s.CreateCodeHandler))
 	mux.Handle("/init-upload", customCallback(s.InitUploadHandler))
 	mux.Handle("/upload", customCallback(s.UploadHandler))
 	mux.Handle("/download", customCallback(s.DownloadHandler))

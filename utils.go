@@ -161,7 +161,7 @@ func InitSession(r *http.Request) *sessions.Session {
 	if appSession != nil {
 		return appSession
 	}
-	session, err := store.Get(r, UploadSessionName)
+	session, err := store.Get(r, uploadSessionName)
 	appSession = session
 	Handle(err)
 	return session

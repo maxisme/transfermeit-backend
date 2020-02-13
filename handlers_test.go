@@ -35,21 +35,21 @@ func TestCredentialHandler(t *testing.T) {
 	UUID, _ := uuid.NewRandom()
 
 	// create account with no UUID
-	rr := PostRequest(form, http.HandlerFunc(s.CredentialHandler))
+	rr := PostRequest(form, http.HandlerFunc(s.CreateCodeHandler))
 	if rr.Code != 400 {
 		t.Errorf("Got %v (%v) expected %v", rr.Code, rr.Body, 400)
 	}
 
 	// create account with no public key
 	form.Set("UUID", UUID.String())
-	rr = PostRequest(form, http.HandlerFunc(s.CredentialHandler))
+	rr = PostRequest(form, http.HandlerFunc(s.CreateCodeHandler))
 	if rr.Code != 401 {
 		t.Errorf("Got %v (%v) expected %v", rr.Code, rr.Body, 401)
 	}
 
 	// create account with invalid public key
 	form.Set("public_key", "not a key")
-	rr = PostRequest(form, http.HandlerFunc(s.CredentialHandler))
+	rr = PostRequest(form, http.HandlerFunc(s.CreateCodeHandler))
 	if rr.Code != 401 {
 		t.Errorf("Got %v (%v) expected %v", rr.Code, rr.Body, 401)
 	}
@@ -57,7 +57,7 @@ func TestCredentialHandler(t *testing.T) {
 	// create account with valid public key
 	form.Del("public_key")
 	form.Set("public_key", b64PubKey)
-	rr = PostRequest(form, http.HandlerFunc(s.CredentialHandler))
+	rr = PostRequest(form, http.HandlerFunc(s.CreateCodeHandler))
 	if rr.Code != 200 {
 		t.Errorf("Got %v (%v) expected %v", rr.Code, rr.Body, 200)
 	}
@@ -235,7 +235,7 @@ func TestPermCode(t *testing.T) {
 	var permCode = user.Code
 
 	// test that if client does not pass perm_user_code it sets a new code
-	rr = PostRequest(form, http.HandlerFunc(s.CredentialHandler))
+	rr = PostRequest(form, http.HandlerFunc(s.CreateCodeHandler))
 	_ = json.Unmarshal(rr.Body.Bytes(), &user)
 	if permCode == user.Code {
 		t.Errorf("Should have given a new random code as perm_user_code was not passed!")
@@ -243,7 +243,7 @@ func TestPermCode(t *testing.T) {
 
 	// request new code
 	form.Set("perm_user_code", permCode)
-	rr = PostRequest(form, http.HandlerFunc(s.CredentialHandler))
+	rr = PostRequest(form, http.HandlerFunc(s.CreateCodeHandler))
 	_ = json.Unmarshal(rr.Body.Bytes(), &user)
 	if permCode != user.Code {
 		t.Errorf("Should have kept same code '%v' instead of returning '%v' %v", permCode, user.Code, rr.Code)
@@ -263,7 +263,7 @@ func TestUUIDReset(t *testing.T) {
 
 	RemoveUUIDKey(form)
 
-	rr := PostRequest(form, http.HandlerFunc(s.CredentialHandler))
+	rr := PostRequest(form, http.HandlerFunc(s.CreateCodeHandler))
 	if rr.Code != 200 {
 		t.Errorf("Got %v (%v) expected %v", rr.Code, rr.Body, 200)
 	}
@@ -290,7 +290,7 @@ func TestCustomCode(t *testing.T) {
 	}
 
 	// test that if client does not pass perm_user_code it sets a new code
-	rr = PostRequest(form, http.HandlerFunc(s.CredentialHandler))
+	rr = PostRequest(form, http.HandlerFunc(s.CreateCodeHandler))
 	_ = json.Unmarshal(rr.Body.Bytes(), &user)
 	if customCode == user.Code {
 		t.Errorf("Should have given a new random code as perm_user_code was not passed!")
@@ -298,7 +298,7 @@ func TestCustomCode(t *testing.T) {
 
 	// test when creating a new code you are given the same custom code
 	form.Set("perm_user_code", customCode)
-	rr = PostRequest(form, http.HandlerFunc(s.CredentialHandler))
+	rr = PostRequest(form, http.HandlerFunc(s.CreateCodeHandler))
 	_ = json.Unmarshal(rr.Body.Bytes(), &user)
 	if customCode != user.Code {
 		t.Errorf("Should have set custom code %v vs %v", customCode, user.Code)

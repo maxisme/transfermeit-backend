@@ -26,8 +26,9 @@ var (
 	}
 )
 
-const UploadSessionName = "upload"
+const uploadSessionName = "upload"
 
+// TogglePermCodeHandler either turns on or off a users perm code depending if they have one already
 func (s *Server) TogglePermCodeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		writeError(w, r, 400, "Invalid method")
@@ -55,7 +56,7 @@ func (s *Server) TogglePermCodeHandler(w http.ResponseWriter, r *http.Request) {
 	if user.Tier >= PermUserTier {
 		permCode, customCode := GetUserPermCode(s.db, user)
 		if permCode.Valid || customCode.Valid {
-			// remove any stored codes (INCLUDING custom code)
+			// remove any stored codes (INCLUDING custom code) as they already have one or the other
 			err := RemovePermCodes(s.db, user)
 			Handle(err)
 		} else {
@@ -73,6 +74,7 @@ func (s *Server) TogglePermCodeHandler(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(jsonReply)
 }
 
+// CustomCodeHandler sets a users custom code
 func (s *Server) CustomCodeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		writeError(w, r, 400, "Invalid method")
@@ -117,6 +119,7 @@ func (s *Server) CustomCodeHandler(w http.ResponseWriter, r *http.Request) {
 	writeError(w, r, 402, "Failed to set activation code")
 }
 
+// RegisterCreditHandler will associate a credit code to an account
 func (s *Server) RegisterCreditHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		writeError(w, r, 400, "Invalid method")
@@ -148,7 +151,8 @@ func (s *Server) RegisterCreditHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) CredentialHandler(w http.ResponseWriter, r *http.Request) {
+// CreateCodeHandler creates an account and/or updates a users code
+func (s *Server) CreateCodeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		writeError(w, r, 400, "Invalid method")
 		return
@@ -237,9 +241,8 @@ func (s *Server) CredentialHandler(w http.ResponseWriter, r *http.Request) {
 	Handle(err)
 }
 
-// the InitUploadHandler tells the server what to suspect in the UploadHandler and
-// handles most validation such as file and bandwidth limits for the user.
-// This is done before so as to not have to wait for the to be transfered to the server
+// InitUploadHandler tells the server what to suspect in the UploadHandler and handles most file upload validation.
+// This is done before so as to not have to wait for the file to be transferred to the server.
 func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		writeError(w, r, 400, "Invalid method")
@@ -314,7 +317,7 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 	// store transfer information in session to be picked up by UploadHandler
 	session := InitSession(r)
 	gob.Register(Transfer{})
-	session.Values[UploadSessionName] = transfer
+	session.Values[uploadSessionName] = transfer
 	err = session.Save(r, w)
 	Handle(err)
 
@@ -322,7 +325,7 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 	Handle(err)
 }
 
-// Only works after running InitUploadHandler
+// UploadHandler handles the file upload but only works after running InitUploadHandler
 func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		writeError(w, r, 400, "Invalid method")
@@ -331,14 +334,14 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	// get session transfer
 	session := InitSession(r)
-	sessionTransfer := session.Values[UploadSessionName].(Transfer)
+	sessionTransfer := session.Values[uploadSessionName].(Transfer)
 	if sessionTransfer.ID == 0 {
 		writeError(w, r, 401, "Init transfer not run")
 		return
 	}
 
 	// delete session
-	session.Values[UploadSessionName] = nil
+	session.Values[uploadSessionName] = nil
 	err := session.Save(r, w)
 	Handle(err)
 
@@ -395,6 +398,7 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	}, transfer.to.UUID, true)
 }
 
+// DownloadHandler handles the download of the file
 func (s *Server) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		writeError(w, r, 400, "Invalid method")
@@ -447,6 +451,7 @@ func (s *Server) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	Handle(err)
 }
 
+// CompletedDownloadHandler fetches the encrypted password of the uploaded file if passed a valid file hash
 func (s *Server) CompletedDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		writeError(w, r, 400, "Invalid method")
