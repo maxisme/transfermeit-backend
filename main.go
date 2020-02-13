@@ -19,8 +19,18 @@ var lmt = tollbooth.NewLimiter(1, &limiter.ExpirableOptions{DefaultExpirationTTL
 	"RemoteAddr", "X-Forwarded-For", "X-Real-IP",
 })
 
+func secKeyHandlerWrapper(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Sec-Key") != os.Getenv("server_key") {
+			writeError(w, r, 400, "Invalid form data")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func customCallback(nextFunc func(http.ResponseWriter, *http.Request)) http.Handler {
-	var h = SecKeyHandler(tollbooth.LimitFuncHandler(lmt, nextFunc))
+	var h = secKeyHandlerWrapper(tollbooth.LimitFuncHandler(lmt, nextFunc))
 	if sentryHandler != nil {
 		return sentryHandler.Handle(h)
 	}

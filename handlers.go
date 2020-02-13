@@ -28,16 +28,6 @@ var (
 
 const UploadSessionName = "upload"
 
-func SecKeyHandler(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Sec-Key") != os.Getenv("server_key") {
-			writeError(w, r, 400, "Invalid form data")
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
 func (s *Server) TogglePermCodeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		writeError(w, r, 400, "Invalid method")
@@ -70,8 +60,8 @@ func (s *Server) TogglePermCodeHandler(w http.ResponseWriter, r *http.Request) {
 			Handle(err)
 		} else {
 			// turn on random perm code
-			permCode := GenUserCode(s.db)
-			if err := SetPermCode(s.db, permCode, user); err != nil {
+			user.Code = GenUserCode(s.db)
+			if err := SetPermCode(s.db, user); err != nil {
 				writeError(w, r, 401, "Failed to set permanent code")
 				return
 			}
@@ -105,15 +95,15 @@ func (s *Server) CustomCodeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customCode := r.Form.Get("custom_code")
-	if len(customCode) != CodeLen {
+	user.Code = r.Form.Get("custom_code")
+	if len(user.Code) != CodeLen {
 		writeError(w, r, 401, "Invalid custom code")
 		return
 	}
 
 	SetUserTier(s.db, &user)
 	if user.Tier >= CustomCodeUserTier {
-		if err := SetCustomCode(s.db, customCode, user); err == nil {
+		if err := SetCustomCode(s.db, user); err == nil {
 			jsonReply, err := json.Marshal(user)
 			Handle(err)
 			w.Header().Set("Content-Type", "application/json")

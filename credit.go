@@ -41,19 +41,19 @@ func RemovePermCodes(db *sql.DB, user User) error {
 }
 
 // SetCustomCode sets a permanent custom code for a user
-func SetCustomCode(db *sql.DB, code string, user User) error {
+func SetCustomCode(db *sql.DB, user User) error {
 	return UpdateErr(db.Exec(`
 	UPDATE credit
 	SET custom_user_code=?
-	WHERE UUID=?`, code, Hash(user.UUID)))
+	WHERE UUID=?`, user.Code, Hash(user.UUID)))
 }
 
 // SetPermCode sets a permanent code for a user
-func SetPermCode(db *sql.DB, code string, user User) error {
+func SetPermCode(db *sql.DB, user User) error {
 	return UpdateErr(db.Exec(`
 	UPDATE credit
 	SET perm_user_code=?
-	WHERE UUID=?`, code, Hash(user.UUID)))
+	WHERE UUID=?`, user.Code, Hash(user.UUID)))
 }
 
 // SetCreditCode associates a credit code to an account
