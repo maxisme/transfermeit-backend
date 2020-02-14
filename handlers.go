@@ -237,19 +237,19 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filesize, err := strconv.Atoi(r.Form.Get("filesize"))
-	if err != nil {
-		WriteError(w, r, 401, "Invalid value for filesize")
-		return
-	}
-
 	user := User{
 		UUID:    r.Form.Get("UUID"),
 		UUIDKey: r.Form.Get("UUID_key"),
 	}
 
 	if !user.IsValid(s.db) {
-		WriteError(w, r, 400, "Method not allowed")
+		WriteError(w, r, 400, "Invalid method")
+		return
+	}
+
+	filesize, err := strconv.Atoi(r.Form.Get("filesize"))
+	if err != nil {
+		WriteError(w, r, 401, "Invalid value for filesize") // TODO test
 		return
 	}
 
@@ -402,7 +402,6 @@ func (s *Server) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !user.IsValid(s.db) {
-		log.Println("Invalid credentials")
 		WriteError(w, r, 400, "Invalid form data")
 		return
 	}

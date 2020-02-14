@@ -17,6 +17,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -326,6 +327,37 @@ func TestInvalidHandlerMethods(t *testing.T) {
 	for i, tt := range invalidHandlerMethods {
 		t.Run(string(i), func(t *testing.T) {
 			req, _ := http.NewRequest(tt.invalidMethod, "", nil)
+
+			rr := httptest.NewRecorder()
+			tt.handler.ServeHTTP(rr, req)
+			if rr.Code != 400 {
+				t.Errorf("Should have responded with error code %d not %d", 400, rr.Code)
+			}
+		})
+	}
+}
+
+var userLoginDetailsHandlers = []struct {
+	handler http.HandlerFunc
+}{
+	{http.HandlerFunc(s.CompletedDownloadHandler)},
+	{http.HandlerFunc(s.InitUploadHandler)},
+	{http.HandlerFunc(s.DownloadHandler)},
+	{http.HandlerFunc(s.RegisterCreditHandler)},
+	{http.HandlerFunc(s.CustomCodeHandler)},
+	{http.HandlerFunc(s.TogglePermCodeHandler)},
+	{http.HandlerFunc(s.WSHandler)},
+}
+
+func TestInvalidIsValidUsers(t *testing.T) {
+	for i, tt := range userLoginDetailsHandlers {
+		t.Run(string(i), func(t *testing.T) {
+
+			invalidUserLogin := url.Values{}
+			invalidUserLogin.Set("UUID", "")
+			invalidUserLogin.Set("UUID_key", "")
+
+			req, _ := http.NewRequest("POST", "", strings.NewReader(invalidUserLogin.Encode()))
 
 			rr := httptest.NewRecorder()
 			tt.handler.ServeHTTP(rr, req)
