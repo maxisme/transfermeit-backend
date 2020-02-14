@@ -41,12 +41,10 @@ func Handle(err error) {
 // UpdateErr returns an error if no rows have been effected
 func UpdateErr(res sql.Result, err error) error {
 	if err != nil {
-		Handle(err)
 		return err
 	}
 
 	rowsEffected, err := res.RowsAffected()
-	Handle(err)
 	if rowsEffected == 0 {
 		return errors.New("no rows effected")
 	}

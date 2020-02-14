@@ -75,3 +75,21 @@ func TestBytesToMegabytes(t *testing.T) {
 		t.Errorf("got %f, wanted %f", MB, 0.01)
 	}
 }
+
+func TestUpdateErr(t *testing.T) {
+	// invalid UUID so shouldn't update any rows
+	err := UpdateErr(s.db.Exec(`
+	UPDATE user 
+	SET UUID_key=''
+	WHERE UUID = ?
+	`, "notauuid"))
+	if err == nil {
+		t.Errorf("Should have failed because there will never be a uuid value of 'notauuid'")
+	}
+
+	// should fail because invalid SQL is passed
+	err = UpdateErr(s.db.Exec(`NOT valid SQL`))
+	if err == nil {
+		t.Errorf("Should have failed because of invalid SQL")
+	}
+}
