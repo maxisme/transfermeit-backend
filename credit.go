@@ -51,7 +51,7 @@ func SetCreditCode(db *sql.DB, user User, activationCode string) error {
 	AND UUID IS NULL`, Hash(user.UUID), activationCode))
 }
 
-// SetCredit fetches the amount of credit the user has linked to their account
+// GetCredit fetches the amount of credit the user has linked to their account
 func GetCredit(db *sql.DB, user User) (credit sql.NullFloat64) {
 	result := db.QueryRow(`SELECT SUM(credit) as total_credit
 	FROM credit
