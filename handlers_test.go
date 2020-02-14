@@ -1,16 +1,10 @@
 package main
 
 import (
-	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"io"
-	"io/ioutil"
 	"math"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -24,7 +18,7 @@ import (
 
 // applied to every test
 func TestMain(m *testing.M) {
-	InitDB(m)
+	initDB(m)
 
 	// clean up
 	_ = os.Remove("./foo.bar")
@@ -36,21 +30,21 @@ func TestCredentialHandler(t *testing.T) {
 	UUID, _ := uuid.NewRandom()
 
 	// create account with no UUID
-	rr := PostRequest(form, http.HandlerFunc(s.CreateCodeHandler))
+	rr := postRequest(form, http.HandlerFunc(s.CreateCodeHandler))
 	if rr.Code != 400 {
 		t.Errorf("Got %v (%v) expected %v", rr.Code, rr.Body, 400)
 	}
 
 	// create account with no public key
 	form.Set("UUID", UUID.String())
-	rr = PostRequest(form, http.HandlerFunc(s.CreateCodeHandler))
+	rr = postRequest(form, http.HandlerFunc(s.CreateCodeHandler))
 	if rr.Code != 401 {
 		t.Errorf("Got %v (%v) expected %v", rr.Code, rr.Body, 401)
 	}
 
 	// create account with invalid public key
 	form.Set("public_key", "not a key")
-	rr = PostRequest(form, http.HandlerFunc(s.CreateCodeHandler))
+	rr = postRequest(form, http.HandlerFunc(s.CreateCodeHandler))
 	if rr.Code != 401 {
 		t.Errorf("Got %v (%v) expected %v", rr.Code, rr.Body, 401)
 	}
@@ -58,7 +52,7 @@ func TestCredentialHandler(t *testing.T) {
 	// create account with valid public key
 	form.Del("public_key")
 	form.Set("public_key", testB64PubKey)
-	rr = PostRequest(form, http.HandlerFunc(s.CreateCodeHandler))
+	rr = postRequest(form, http.HandlerFunc(s.CreateCodeHandler))
 	if rr.Code != 200 {
 		t.Errorf("Got %v (%v) expected %v", rr.Code, rr.Body, 200)
 	}
@@ -72,7 +66,7 @@ func TestCredentialHandler(t *testing.T) {
 }
 
 func TestWSHandler(t *testing.T) {
-	user, form := GenUser()
+	user, form := genUser()
 	time.Sleep(time.Millisecond * time.Duration(100))
 
 	wsheader := http.Header{}
@@ -89,131 +83,101 @@ func TestWSHandler(t *testing.T) {
 
 	for _, tt := range headers {
 		wsheader.Set(tt.key, tt.value)
-		_, res, _, err := ConnectWSSHeader(wsheader)
+		_, res, _, err := connectWSSHeader(wsheader)
 		if err == nil != tt.out {
 			t.Errorf("got %v, wanted %v - %v %v %v", err == nil, tt.out, res.Status, err, wsheader)
 		}
 	}
 }
 
-func InitUpload(form1 url.Values, user1 User, user2 User, fileSize int) *httptest.ResponseRecorder {
-	form1.Set("UUID_key", user1.UUIDKey)
-	form1.Set("code", user2.Code)
-	form1.Set("filesize", strconv.Itoa(fileSize))
-	return PostRequest(form1, http.HandlerFunc(s.InitUploadHandler))
-}
-
-func UploadFile(f *os.File, initCookie string, pass string) *httptest.ResponseRecorder {
-	body := new(bytes.Buffer)
-	writer := multipart.NewWriter(body)
-	part, _ := writer.CreateFormFile("file", f.Name())
-	fileContents, _ := ioutil.ReadAll(f)
-	_, _ = part.Write(fileContents)
-	_ = writer.WriteField("password", pass)
-	_ = writer.Close()
-	_, _ = io.Copy(part, f)
-	req, _ := http.NewRequest("POST", "", body)
-	req.Header.Set("Cookie", initCookie)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	uploadR := httptest.NewRecorder()
-	http.HandlerFunc(s.UploadHandler).ServeHTTP(uploadR, req)
-	return uploadR
-}
-
 func TestUploadDownloadCycle(t *testing.T) {
-
 	// create two users
-	user1, form1 := GenUser()
-	user2, form2 := GenUser()
-	_, _, user1Ws, _ := ConnectWSS(user1, form1)
+	user1, form1 := genUser()
+	user2, form2 := genUser()
+	_, _, user1Ws, _ := connectWSS(user1, form1)
 
-	////////////
-	// UPLOAD //
-	////////////
-
-	// create a file
+	// UPLOAD
 	fileSize := MegabytesToBytes(10)
-	f, _ := os.Create("foo.bar")
-	defer f.Close()
-	defer os.Remove("foo.bar")
-	_ = f.Truncate(int64(fileSize))
-
-	// initial upload handler
-	initUploadR := InitUpload(form1, user1, user2, fileSize)
-	if initUploadR.Code != 200 {
-		t.Errorf("Got %v (%v) expected %v", initUploadR.Code, initUploadR.Body, 200)
-	} else if initUploadR.Body.String() != testB64PubKey {
-		t.Errorf("Got '%v' expected '%v'", initUploadR.Body, testB64PubKey)
-	}
-
-	// actual file upload handler
-	password := RandomString(10)
-	uploadR := UploadFile(f, initUploadR.Header().Get("Set-Cookie"), password)
-	if uploadR.Code != 200 {
-		t.Errorf("Got %v (%v) expected %v", uploadR.Code, uploadR.Body, 200)
-		return
-	}
+	password := upload(t, user1, user2, form1, user1Ws, fileSize)
 
 	// DOWNLOAD
 
-	// fetch stored file path notification on Server that were sent when not connected
-	_, _, user2Ws, _ := ConnectWSS(user2, form2)
-	message := ReadSocketMessage(user2Ws)
+	// fetch initial message containing download file path that was sent when user was not connected to web socket
+	_, _, user2Ws, _ := connectWSS(user2, form2)
+	message := readSocketMessage(user2Ws)
 	filePath := message.Download.FilePath
 	if len(path.Dir(filePath)) != userDirLen {
 		t.Fatalf(filePath)
 	}
 	user2Ws.Close()
 
-	// attempt to download file
+	// download file at path
 	form2.Set("UUID_key", user2.UUIDKey)
 	form2.Set("file_path", filePath)
-	rr := PostRequest(form2, http.HandlerFunc(s.DownloadHandler))
+	rr := postRequest(form2, http.HandlerFunc(s.DownloadHandler))
 	if rr.Code != 200 || len(rr.Body.Bytes()) != fileSize {
-		t.Errorf("Got %v expected %v", uploadR.Code, 200)
 		t.Errorf("Got %v expected %v", len(rr.Body.Bytes()), fileSize)
 	}
 
-	// get file hash
-	hasher := sha256.New()
-	_, _ = hasher.Write(rr.Body.Bytes())
-
 	// run complete handler to receive password
 	form2.Set("file_path", filePath)
-	form2.Set("hash", hex.EncodeToString(hasher.Sum(nil)))
-	rr2 := PostRequest(form2, http.HandlerFunc(s.CompletedDownloadHandler))
+	form2.Set("hash", HashWithBytes(rr.Body.Bytes()))
+	rr2 := postRequest(form2, http.HandlerFunc(s.CompletedDownloadHandler))
 	if rr2.Body.String() != password {
 		t.Errorf("Got %v expected %v", rr2.Body.String(), password)
 	}
 
+	// verify file was deleted from server
 	if _, err := os.Stat(fileStoreDirectory + filePath); err == nil {
-		t.Errorf("'%v' should have been deleted", fileStoreDirectory+filePath)
+		t.Errorf("file at path: '%v' should have been deleted", fileStoreDirectory+filePath)
 	}
 
-	message = ReadSocketMessage(user1Ws)
+	// fetch updated user stats from socket
+	message = readSocketMessage(user1Ws)
 	if message.User.BandwidthLeft != freeBandwidthBytes-fileSize {
 		t.Errorf("expected %v got %v", freeBandwidthBytes-fileSize, message.User.BandwidthLeft)
 	}
 
-	message = ReadSocketMessage(user1Ws)
+	// fetch success notification
+	message = readSocketMessage(user1Ws)
 	if message.Message.Title != "Successful Transfer" {
-		t.Errorf("expected: %v got %v", "Successful Transfer", message.User.BandwidthLeft)
+		t.Errorf("expected: %v got %v", "Successful Transfer", message.Message.Title)
+	}
+}
+
+func TestInvalidUploadFileSizeVariable(t *testing.T) {
+	user1, form1 := genUser()
+	form1.Set("UUID_key", user1.UUIDKey)
+	rr := postRequest(form1, http.HandlerFunc(s.InitUploadHandler))
+	if rr.Code != 401 {
+		t.Errorf("expected: %d got %d - %s", 401, rr.Code, rr.Body.String())
+	}
+}
+
+func TestInvalidSendUploadToSelf(t *testing.T) {
+	user1, form1 := genUser()
+	form1.Set("UUID_key", user1.UUIDKey)
+	form1.Set("filesize", strconv.Itoa(123))
+	form1.Set("code", user1.Code)
+	rr := postRequest(form1, http.HandlerFunc(s.InitUploadHandler))
+	if rr.Code != 402 {
+		t.Errorf("expected: %d got %d - %s", 402, rr.Code, rr.Body.String())
 	}
 }
 
 func TestCodeTimeout(t *testing.T) {
-	user, form := GenUser()
+	user, form := genUser()
 
 	const secondHang = 3
 	time.Sleep(time.Second * time.Duration(secondHang))
 
-	_, _, ws, _ := ConnectWSS(user, form)
+	_, _, ws, _ := connectWSS(user, form)
 
 	// send stats socket message to acquire user info
 	socketMessage, _ := json.Marshal(IncomingSocketMessage{Type: "stats"})
 	_ = ws.WriteMessage(websocket.TextMessage, socketMessage)
 
-	message := ReadSocketMessage(ws)
+	message := readSocketMessage(ws)
 
 	secondsLeft := math.Floor(message.User.Expiry.Sub(time.Now()).Seconds())
 	estimatedSecondsLeft := defaultAccountLifeMins*60 - secondHang
@@ -224,10 +188,10 @@ func TestCodeTimeout(t *testing.T) {
 }
 
 func TestPermCode(t *testing.T) {
-	_, form := GenCreditUser(permCodeCreditAmt)
+	_, form := genCreditUser(permCodeCreditAmt)
 
 	// toggle on perm code
-	rr := PostRequest(form, http.HandlerFunc(s.TogglePermCodeHandler))
+	rr := postRequest(form, http.HandlerFunc(s.TogglePermCodeHandler))
 	if rr.Code != 200 {
 		t.Errorf("Got %v expected %v", rr.Body.String(), 200)
 	}
@@ -236,7 +200,7 @@ func TestPermCode(t *testing.T) {
 	var permCode = user.Code
 
 	// test that if client does not pass perm_user_code it sets a new code
-	rr = PostRequest(form, http.HandlerFunc(s.CreateCodeHandler))
+	rr = postRequest(form, http.HandlerFunc(s.CreateCodeHandler))
 	_ = json.Unmarshal(rr.Body.Bytes(), &user)
 	if permCode == user.Code {
 		t.Errorf("Should have given a new random code as perm_user_code was not passed!")
@@ -244,7 +208,7 @@ func TestPermCode(t *testing.T) {
 
 	// request new code
 	form.Set("perm_user_code", permCode)
-	rr = PostRequest(form, http.HandlerFunc(s.CreateCodeHandler))
+	rr = postRequest(form, http.HandlerFunc(s.CreateCodeHandler))
 	_ = json.Unmarshal(rr.Body.Bytes(), &user)
 	if permCode != user.Code {
 		t.Errorf("Should have kept same code '%v' instead of returning '%v' %v", permCode, user.Code, rr.Code)
@@ -252,7 +216,7 @@ func TestPermCode(t *testing.T) {
 	permCode = user.Code
 
 	// toggle off perm code
-	rr = PostRequest(form, http.HandlerFunc(s.TogglePermCodeHandler))
+	rr = postRequest(form, http.HandlerFunc(s.TogglePermCodeHandler))
 	_ = json.Unmarshal(rr.Body.Bytes(), &user)
 	if permCode == user.Code {
 		t.Errorf("Should have changed code %v vs %v", permCode, user.Code)
@@ -260,11 +224,11 @@ func TestPermCode(t *testing.T) {
 }
 
 func TestUUIDReset(t *testing.T) {
-	_, form := GenUser()
+	_, form := genUser()
 
-	RemoveUUIDKey(form)
+	removeUUIDKey(form)
 
-	rr := PostRequest(form, http.HandlerFunc(s.CreateCodeHandler))
+	rr := postRequest(form, http.HandlerFunc(s.CreateCodeHandler))
 	if rr.Code != 200 {
 		t.Errorf("Got %v (%v) expected %v", rr.Code, rr.Body, 200)
 	}
@@ -280,18 +244,18 @@ func TestCustomCode(t *testing.T) {
 	var customCode = GenCode(s.db)
 	var user User
 
-	_, form := GenCreditUser(customCodeCreditAmt)
+	_, form := genCreditUser(customCodeCreditAmt)
 
 	// set a custom code
 	form.Set("custom_code", customCode)
-	rr := PostRequest(form, http.HandlerFunc(s.CustomCodeHandler))
+	rr := postRequest(form, http.HandlerFunc(s.CustomCodeHandler))
 	_ = json.Unmarshal(rr.Body.Bytes(), &user)
 	if customCode != user.Code {
 		t.Errorf("Should have set custom code %v vs %v", customCode, user.Code)
 	}
 
 	// test that if client does not pass perm_user_code it sets a new code
-	rr = PostRequest(form, http.HandlerFunc(s.CreateCodeHandler))
+	rr = postRequest(form, http.HandlerFunc(s.CreateCodeHandler))
 	_ = json.Unmarshal(rr.Body.Bytes(), &user)
 	if customCode == user.Code {
 		t.Errorf("Should have given a new random code as perm_user_code was not passed!")
@@ -299,7 +263,7 @@ func TestCustomCode(t *testing.T) {
 
 	// test when creating a new code you are given the same custom code
 	form.Set("perm_user_code", customCode)
-	rr = PostRequest(form, http.HandlerFunc(s.CreateCodeHandler))
+	rr = postRequest(form, http.HandlerFunc(s.CreateCodeHandler))
 	_ = json.Unmarshal(rr.Body.Bytes(), &user)
 	if customCode != user.Code {
 		t.Errorf("Should have set custom code %v vs %v", customCode, user.Code)

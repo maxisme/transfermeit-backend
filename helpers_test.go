@@ -4,6 +4,7 @@ helpers for *_test.go code
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/Pallinder/go-randomdata"
@@ -12,12 +13,16 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"io"
+	"io/ioutil"
 	"log"
 	"math/rand"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -27,7 +32,7 @@ var s Server
 
 const testB64PubKey = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvxvSoA5+YJ0dK3HFy9ccnalbqSgVGJYmQXl/1JBcN1zZGUrsBDAPRdX+TTgWbW4Ah8C+PUVmf6YbA5d+ZWmBUIYds4Ft/v2qbh3/rBEFvNw+/HhspclzwI1On6EcnylLalpF6JYYjuw4QqIJd/CsnABZwAFQ8czdtUbomic7gh9UdjkEFed5C3QqD3Nes7w7glkrEocTzwizLuxnpQZFhDEjGgONgGJSi92yf8eh0STSLGrWjT8+nw/Dw6RSWQAZviEyRtJ52WdFHIsQEAU81N5NpCr7rDPr9GHFU8sdo8Lp3fQntOIvyjpIzKUXWyp+QVJAh6GMw2Fn16S+Jg127wIDAQAB"
 
-func InitDB(t *testing.M) {
+func initDB(t *testing.M) {
 	rand.Seed(time.Now().UTC().UnixNano())
 	TESTDBNAME := "transfermeit_test"
 
@@ -71,7 +76,7 @@ func InitDB(t *testing.M) {
 	os.Exit(code)
 }
 
-func PostRequest(form url.Values, handler http.HandlerFunc) *httptest.ResponseRecorder {
+func postRequest(form url.Values, handler http.HandlerFunc) *httptest.ResponseRecorder {
 	req, _ := http.NewRequest("POST", "", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
@@ -79,12 +84,12 @@ func PostRequest(form url.Values, handler http.HandlerFunc) *httptest.ResponseRe
 	return rr
 }
 
-func GenUser() (user User, form url.Values) {
+func genUser() (user User, form url.Values) {
 	form = url.Values{}
 	UUID, _ := uuid.NewRandom()
 	form.Set("UUID", UUID.String())
 	form.Set("public_key", testB64PubKey)
-	rr := PostRequest(form, http.HandlerFunc(s.CreateCodeHandler))
+	rr := postRequest(form, http.HandlerFunc(s.CreateCodeHandler))
 	if err := json.Unmarshal(rr.Body.Bytes(), &user); err != nil {
 		log.Fatal(err)
 	}
@@ -92,27 +97,27 @@ func GenUser() (user User, form url.Values) {
 	return
 }
 
-func GenCreditUser(credit float64) (user User, form url.Values) {
-	user, form = GenUser()
+func genCreditUser(credit float64) (user User, form url.Values) {
+	user, form = genUser()
 
 	creditCode := RandomString(CreditCodeLen)
-	GenerateProCredit(creditCode, credit)
+	generateProCredit(creditCode, credit)
 
 	form.Set("UUID_key", user.UUIDKey)
 	form.Set("credit_code", creditCode)
-	_ = PostRequest(form, http.HandlerFunc(s.RegisterCreditHandler))
+	_ = postRequest(form, http.HandlerFunc(s.RegisterCreditHandler))
 	return
 }
 
-func ConnectWSS(user User, form url.Values) (*httptest.Server, *http.Response, *websocket.Conn, error) {
+func connectWSS(user User, form url.Values) (*httptest.Server, *http.Response, *websocket.Conn, error) {
 	wsheader := http.Header{}
 	wsheader.Set("UUID", form.Get("UUID"))
 	wsheader.Set("UUID-key", user.UUIDKey)
 	wsheader.Set("Version", "1.0")
-	return ConnectWSSHeader(wsheader)
+	return connectWSSHeader(wsheader)
 }
 
-func ReadSocketMessage(ws *websocket.Conn) (message SocketMessage) {
+func readSocketMessage(ws *websocket.Conn) (message SocketMessage) {
 	_, mess, err := ws.ReadMessage()
 	if err != nil {
 		Handle(err)
@@ -122,7 +127,7 @@ func ReadSocketMessage(ws *websocket.Conn) (message SocketMessage) {
 	return
 }
 
-func ConnectWSSHeader(wsheader http.Header) (*httptest.Server, *http.Response, *websocket.Conn, error) {
+func connectWSSHeader(wsheader http.Header) (*httptest.Server, *http.Response, *websocket.Conn, error) {
 	server := httptest.NewServer(http.HandlerFunc(s.WSHandler))
 	ws, res, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http"), wsheader)
 	Handle(err)
@@ -133,7 +138,7 @@ func ConnectWSSHeader(wsheader http.Header) (*httptest.Server, *http.Response, *
 	return server, res, ws, err
 }
 
-func GenerateProCredit(activationCode string, credit float64) {
+func generateProCredit(activationCode string, credit float64) {
 	_, err := s.db.Exec(`
 	INSERT INTO credit (activation_dttm, activation_code, credit, email)
 	VALUES (NOW(), ?, ?, ?)
@@ -141,10 +146,64 @@ func GenerateProCredit(activationCode string, credit float64) {
 	Handle(err)
 }
 
-func RemoveUUIDKey(form url.Values) {
+func removeUUIDKey(form url.Values) {
 	Handle(UpdateErr(s.db.Exec(`
 	UPDATE user 
 	SET UUID_key=''
 	WHERE UUID = ?
 	`, Hash(form.Get("UUID")))))
+}
+
+func upload(t *testing.T, user1 User, user2 User, form1 url.Values, user1Ws *websocket.Conn, fileSize int) string {
+
+	////////////
+	// UPLOAD //
+	////////////
+
+	// create a file
+	f, _ := os.Create("foo.bar")
+	defer f.Close()
+	defer os.Remove("foo.bar")
+	_ = f.Truncate(int64(fileSize))
+
+	// initial upload handler
+	initUploadR := initUpload(form1, user1, user2, fileSize)
+	if initUploadR.Code != 200 {
+		t.Errorf("Got %v (%v) expected %v", initUploadR.Code, initUploadR.Body, 200)
+	} else if initUploadR.Body.String() != testB64PubKey {
+		t.Errorf("Got '%v' expected '%v'", initUploadR.Body, testB64PubKey)
+	}
+
+	// actual file upload handler
+	password := RandomString(10)
+	uploadR := uploadFile(f, initUploadR.Header().Get("Set-Cookie"), password)
+	if uploadR.Code != 200 {
+		t.Errorf("Got %v (%v) expected %v", uploadR.Code, uploadR.Body, 200)
+	}
+
+	return password
+}
+
+func initUpload(form1 url.Values, user1 User, user2 User, fileSize int) *httptest.ResponseRecorder {
+	form1.Set("UUID_key", user1.UUIDKey)
+	form1.Set("code", user2.Code)
+	form1.Set("filesize", strconv.Itoa(fileSize))
+	return postRequest(form1, http.HandlerFunc(s.InitUploadHandler))
+}
+
+func uploadFile(f *os.File, initCookie string, pass string) *httptest.ResponseRecorder {
+	body := new(bytes.Buffer)
+	writer := multipart.NewWriter(body)
+	part, _ := writer.CreateFormFile("file", f.Name())
+	fileContents, _ := ioutil.ReadAll(f)
+	_, _ = part.Write(fileContents)
+	_ = writer.WriteField("password", pass)
+	_ = writer.Close()
+	_, _ = io.Copy(part, f)
+	req, _ := http.NewRequest("POST", "", body)
+	req.Header.Set("Cookie", initCookie)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	uploadR := httptest.NewRecorder()
+	http.HandlerFunc(s.UploadHandler).ServeHTTP(uploadR, req)
+	return uploadR
 }

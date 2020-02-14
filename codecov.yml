@@ -3,3 +3,4 @@ coverage:
 
 ignore:
   - "main.go"
+  - "page_handlers.go"

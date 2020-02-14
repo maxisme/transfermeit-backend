@@ -261,7 +261,7 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if friend.UUID == Hash(user.UUID) {
-		WriteError(w, r, 401, "Your can't send files to yourself!")
+		WriteError(w, r, 402, "Your can't send files to yourself!")
 		return
 	}
 
@@ -276,6 +276,7 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, 401, m)
 		return
 	}
+
 	if user.BandwidthLeft-filesize < 0 {
 		WriteError(w, r, 401, "This transfer exceeds today's bandwidth limit!")
 		return
