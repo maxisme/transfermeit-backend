@@ -101,12 +101,12 @@ func HashWithBytes(bytes []byte) string {
 
 // MegabytesToBytes converts MB to bytes
 func MegabytesToBytes(megabytes float64) int {
-	return int(megabytes * 1000000)
+	return int(megabytes * 1000000.0)
 }
 
 // BytesToMegabytes converts bytes to MB
 func BytesToMegabytes(bytes int) float64 {
-	return float64(bytes / 1000000)
+	return float64(bytes) / 1000000.0
 }
 
 // CreditToFileUploadSize converts user credit to user max file upload size

@@ -68,3 +68,10 @@ func TestBytesToReadable(t *testing.T) {
 		})
 	}
 }
+
+func TestBytesToMegabytes(t *testing.T) {
+	MB := BytesToMegabytes(10000)
+	if MB != 0.01 {
+		t.Errorf("got %f, wanted %f", MB, 0.01)
+	}
+}
