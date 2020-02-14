@@ -92,7 +92,7 @@ func Hash(str string) string {
 }
 
 // HashWithBytes hashes bytes
-func HashBytes(bytes []byte) string {
+func HashWithBytes(bytes []byte) string {
 	hasher := sha256.New()
 	_, err := hasher.Write(bytes)
 	Handle(err)

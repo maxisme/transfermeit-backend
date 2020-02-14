@@ -370,7 +370,7 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	transfer := sessionTransfer
 	transfer.FilePath = strings.Replace(fileLocation, fileStoreDirectory, "", -1)
 	transfer.expiry = time.Now().Add(time.Minute * time.Duration(sessionTransfer.from.WantedMins))
-	transfer.hash = HashBytes(fileBytes)
+	transfer.hash = HashWithBytes(fileBytes)
 	transfer.Size = int(handler.Size)
 
 	Handle(transfer.Store(s.db))
