@@ -50,20 +50,20 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// connect to socket
-	wsconn, _ := Upgrader.Upgrade(w, r, nil)
+	wsconn, _ := upgrader.Upgrade(w, r, nil)
 
 	// add web socket connection to list of clients
-	WSClientsMutex.Lock()
-	WSClients[Hash(user.UUID)] = wsconn
-	WSClientsMutex.Unlock()
+	clientsWSMutex.Lock()
+	clientsWS[Hash(user.UUID)] = wsconn
+	clientsWSMutex.Unlock()
 
 	// mark user as connected in db
 	go user.IsConnected(s.db, true)
 
 	// get pending messages
-	PendingSocketMutex.RLock()
-	messages, ok := PendingSocketMessages[Hash(user.UUID)]
-	PendingSocketMutex.RUnlock()
+	pendingSocketMutex.RLock()
+	messages, ok := pendingSocketMessages[Hash(user.UUID)]
+	pendingSocketMutex.RUnlock()
 	if ok {
 		// send pending messages to user
 		for _, message := range messages {
@@ -71,9 +71,9 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// delete any pending socket messages
-		PendingSocketMutex.Lock()
-		delete(PendingSocketMessages, Hash(user.UUID))
-		PendingSocketMutex.Unlock()
+		pendingSocketMutex.Lock()
+		delete(pendingSocketMessages, Hash(user.UUID))
+		pendingSocketMutex.Unlock()
 	}
 
 	// incoming socket messages
@@ -100,18 +100,18 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	go user.IsConnected(s.db, false)
 
 	// remove client from clients
-	WSClientsMutex.Lock()
-	delete(WSClients, user.UUID)
-	WSClientsMutex.Unlock()
+	clientsWSMutex.Lock()
+	delete(clientsWS, user.UUID)
+	clientsWSMutex.Unlock()
 }
 
 // SendSocketMessage sends a socket message to a connected UUID and stores if not connected
 func SendSocketMessage(message SocketMessage, UUID string, storeOnFail bool) bool {
 	hashUUID := Hash(UUID)
 
-	WSClientsMutex.RLock()
-	socket, ok := WSClients[hashUUID]
-	WSClientsMutex.RUnlock()
+	clientsWSMutex.RLock()
+	socket, ok := clientsWS[hashUUID]
+	clientsWSMutex.RUnlock()
 
 	if ok {
 		jsonReply, err := json.Marshal(message)
@@ -127,9 +127,9 @@ func SendSocketMessage(message SocketMessage, UUID string, storeOnFail bool) boo
 	}
 
 	if storeOnFail {
-		PendingSocketMutex.Lock()
-		PendingSocketMessages[hashUUID] = append(PendingSocketMessages[hashUUID], message)
-		PendingSocketMutex.Unlock()
+		pendingSocketMutex.Lock()
+		pendingSocketMessages[hashUUID] = append(pendingSocketMessages[hashUUID], message)
+		pendingSocketMutex.Unlock()
 	}
 
 	return false

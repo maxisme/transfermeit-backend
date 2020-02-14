@@ -22,12 +22,13 @@ const (
 )
 
 var (
-	PendingSocketMessages = map[string][]SocketMessage{}
-	PendingSocketMutex    = sync.RWMutex{}
+	pendingSocketMessages = map[string][]SocketMessage{}
+	pendingSocketMutex    = sync.RWMutex{}
 )
 
-var FileStoreDirectory = os.Getenv("file_dir")
+var fileStoreDirectory = os.Getenv("file_dir")
 
+// Transfer structure
 type Transfer struct {
 	ID       int       `json:"-"`
 	FilePath string    `json:"file_path"`
@@ -204,7 +205,7 @@ func getAllDisplayTransfers(db *sql.DB) []displayTransfer {
 }
 
 func deleteUploadDir(filePath string) bool {
-	dir := path.Dir(FileStoreDirectory + filePath)
+	dir := path.Dir(fileStoreDirectory + filePath)
 	if err := os.RemoveAll(dir); err != nil {
 		_ = os.Remove(dir)
 		Handle(err)

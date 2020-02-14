@@ -28,6 +28,7 @@ type liveContent struct {
 	Users   []displayUser
 }
 
+// LiveHandler returns a page displaying all historic transfers
 func (s *Server) LiveHandler(w http.ResponseWriter, r *http.Request) {
 	tmplPath := "web/templates/live.html"
 	tmpl := template.Must(template.ParseFiles(tmplPath))

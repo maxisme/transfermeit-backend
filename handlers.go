@@ -16,10 +16,10 @@ import (
 )
 
 var (
-	WSClients      = make(map[string]*websocket.Conn)
-	WSClientsMutex = sync.RWMutex{}
+	clientsWS      = make(map[string]*websocket.Conn)
+	clientsWSMutex = sync.RWMutex{}
 
-	Upgrader = websocket.Upgrader{
+	upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 	}
@@ -359,7 +359,7 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	Handle(err)
 
 	// write file to server
-	dir := FileStoreDirectory + RandomString(userDirLen)
+	dir := fileStoreDirectory + RandomString(userDirLen)
 	err = os.MkdirAll(dir, 0744)
 	Handle(err)
 	fileLocation := dir + "/" + handler.Filename
@@ -368,7 +368,7 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	// write full details in transfer struct
 	transfer := sessionTransfer
-	transfer.FilePath = strings.Replace(fileLocation, FileStoreDirectory, "", -1)
+	transfer.FilePath = strings.Replace(fileLocation, fileStoreDirectory, "", -1)
 	transfer.expiry = time.Now().Add(time.Minute * time.Duration(sessionTransfer.from.WantedMins))
 	transfer.hash = HashBytes(fileBytes)
 	transfer.Size = int(handler.Size)
@@ -413,7 +413,7 @@ func (s *Server) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	f, err := os.Open(FileStoreDirectory + filePath)
+	f, err := os.Open(fileStoreDirectory + filePath)
 	if err != nil {
 		Handle(err)
 		WriteError(w, r, 401, err.Error())

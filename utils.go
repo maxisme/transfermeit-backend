@@ -91,6 +91,14 @@ func Hash(str string) string {
 	return string(b64.StdEncoding.EncodeToString(v[:]))
 }
 
+// HashWithBytes hashes bytes
+func HashBytes(bytes []byte) string {
+	hasher := sha256.New()
+	_, err := hasher.Write(bytes)
+	Handle(err)
+	return hex.EncodeToString(hasher.Sum(nil))
+}
+
 // MegabytesToBytes converts MB to bytes
 func MegabytesToBytes(megabytes float64) int {
 	return int(megabytes * 1000000)
@@ -101,7 +109,7 @@ func BytesToMegabytes(bytes int) float64 {
 	return float64(bytes / 1000000)
 }
 
-// CreditToBandwidth converts user credit to user max file upload size
+// CreditToFileUploadSize converts user credit to user max file upload size
 func CreditToFileUploadSize(credit float64) (bytes int) {
 	bytes = freeFileUploadBytes
 	for {
@@ -189,11 +197,4 @@ func BytesToReadable(bytes int) string {
 		stringVal,
 		units[int(base)],
 	)
-}
-
-func HashBytes(bytes []byte) string {
-	hasher := sha256.New()
-	_, err := hasher.Write(bytes)
-	Handle(err)
-	return hex.EncodeToString(hasher.Sum(nil))
 }

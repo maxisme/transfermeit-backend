@@ -185,8 +185,8 @@ func TestUploadDownloadCycle(t *testing.T) {
 		t.Errorf("Got %v expected %v", rr2.Body.String(), password)
 	}
 
-	if _, err := os.Stat(FileStoreDirectory + filePath); err == nil {
-		t.Errorf("'%v' should have been deleted", FileStoreDirectory+filePath)
+	if _, err := os.Stat(fileStoreDirectory + filePath); err == nil {
+		t.Errorf("'%v' should have been deleted", fileStoreDirectory+filePath)
 	}
 
 	message = ReadSocketMessage(user1Ws)
