@@ -24,7 +24,8 @@ import (
 )
 
 var s Server
-var b64PubKey = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvxvSoA5+YJ0dK3HFy9ccnalbqSgVGJYmQXl/1JBcN1zZGUrsBDAPRdX+TTgWbW4Ah8C+PUVmf6YbA5d+ZWmBUIYds4Ft/v2qbh3/rBEFvNw+/HhspclzwI1On6EcnylLalpF6JYYjuw4QqIJd/CsnABZwAFQ8czdtUbomic7gh9UdjkEFed5C3QqD3Nes7w7glkrEocTzwizLuxnpQZFhDEjGgONgGJSi92yf8eh0STSLGrWjT8+nw/Dw6RSWQAZviEyRtJ52WdFHIsQEAU81N5NpCr7rDPr9GHFU8sdo8Lp3fQntOIvyjpIzKUXWyp+QVJAh6GMw2Fn16S+Jg127wIDAQAB"
+
+const testB64PubKey = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvxvSoA5+YJ0dK3HFy9ccnalbqSgVGJYmQXl/1JBcN1zZGUrsBDAPRdX+TTgWbW4Ah8C+PUVmf6YbA5d+ZWmBUIYds4Ft/v2qbh3/rBEFvNw+/HhspclzwI1On6EcnylLalpF6JYYjuw4QqIJd/CsnABZwAFQ8czdtUbomic7gh9UdjkEFed5C3QqD3Nes7w7glkrEocTzwizLuxnpQZFhDEjGgONgGJSi92yf8eh0STSLGrWjT8+nw/Dw6RSWQAZviEyRtJ52WdFHIsQEAU81N5NpCr7rDPr9GHFU8sdo8Lp3fQntOIvyjpIzKUXWyp+QVJAh6GMw2Fn16S+Jg127wIDAQAB"
 
 func InitDB(t *testing.M) {
 	rand.Seed(time.Now().UTC().UnixNano())
@@ -79,10 +80,10 @@ func PostRequest(form url.Values, handler http.HandlerFunc) *httptest.ResponseRe
 }
 
 func GenUser() (user User, form url.Values) {
-	form = make(url.Values)
+	form = url.Values{}
 	UUID, _ := uuid.NewRandom()
 	form.Set("UUID", UUID.String())
-	form.Set("public_key", b64PubKey)
+	form.Set("public_key", testB64PubKey)
 	rr := PostRequest(form, http.HandlerFunc(s.CreateCodeHandler))
 	if err := json.Unmarshal(rr.Body.Bytes(), &user); err != nil {
 		log.Fatal(err)

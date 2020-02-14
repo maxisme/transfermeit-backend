@@ -57,7 +57,7 @@ func TestCredentialHandler(t *testing.T) {
 
 	// create account with valid public key
 	form.Del("public_key")
-	form.Set("public_key", b64PubKey)
+	form.Set("public_key", testB64PubKey)
 	rr = PostRequest(form, http.HandlerFunc(s.CreateCodeHandler))
 	if rr.Code != 200 {
 		t.Errorf("Got %v (%v) expected %v", rr.Code, rr.Body, 200)
@@ -142,8 +142,8 @@ func TestUploadDownloadCycle(t *testing.T) {
 	initUploadR := InitUpload(form1, user1, user2, fileSize)
 	if initUploadR.Code != 200 {
 		t.Errorf("Got %v (%v) expected %v", initUploadR.Code, initUploadR.Body, 200)
-	} else if initUploadR.Body.String() != b64PubKey {
-		t.Errorf("Got '%v' expected '%v'", initUploadR.Body, b64PubKey)
+	} else if initUploadR.Body.String() != testB64PubKey {
+		t.Errorf("Got '%v' expected '%v'", initUploadR.Body, testB64PubKey)
 	}
 
 	// actual file upload handler
