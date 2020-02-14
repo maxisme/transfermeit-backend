@@ -52,7 +52,7 @@ func (s *Server) TogglePermCodeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user.GetTier(s.db)
-	if user.Tier >= PermUserTier {
+	if user.Tier >= permUserTier {
 		permCode, customCode := GetUserPermCode(s.db, user)
 		if permCode.Valid || customCode.Valid {
 			// remove any stored codes (INCLUDING custom code) as they already have one or the other
@@ -95,13 +95,13 @@ func (s *Server) CustomCodeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user.Code = r.Form.Get("custom_code")
-	if len(user.Code) != CodeLen {
+	if len(user.Code) != codeLen {
 		WriteError(w, r, 401, "Invalid custom code")
 		return
 	}
 
 	user.GetTier(s.db)
-	if user.Tier >= CustomCodeUserTier {
+	if user.Tier >= customCodeUserTier {
 		err := SetCustomCode(s.db, user)
 		if err == nil {
 			Handle(WriteJSON(w, user))
@@ -179,7 +179,7 @@ func (s *Server) CreateCodeHandler(w http.ResponseWriter, r *http.Request) {
 
 	wm, err := strconv.Atoi(r.Form.Get("wanted_mins")) // convert to int
 	if err != nil {
-		wm = DefaultAccountLifeMins
+		wm = defaultAccountLifeMins
 	}
 	user.SetWantedMins(s.db, wm)
 
@@ -195,9 +195,9 @@ func (s *Server) CreateCodeHandler(w http.ResponseWriter, r *http.Request) {
 		user.UUIDKey = RandomString(UUIDKeyLen)
 		user.MaxFileSize = freeFileUploadBytes
 		user.BandwidthLeft = freeBandwidthBytes
-		user.MinsAllowed = DefaultAccountLifeMins
-		user.WantedMins = DefaultAccountLifeMins
-		user.Expiry = time.Now().Add(time.Minute * time.Duration(DefaultAccountLifeMins)).UTC()
+		user.MinsAllowed = defaultAccountLifeMins
+		user.WantedMins = defaultAccountLifeMins
+		user.Expiry = time.Now().Add(time.Minute * time.Duration(defaultAccountLifeMins)).UTC()
 		go user.Store(s.db)
 	} else {
 		if len(UUIDKey) == 0 {

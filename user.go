@@ -7,22 +7,22 @@ import (
 	"time"
 )
 
-const CodeLen = 7
+const codeLen = 7
 const UUIDKeyLen = 200
 const (
-	DefaultAccountLifeMins = 10
-	MaxAccountLifeMins     = 60
+	defaultAccountLifeMins = 10
+	maxAccountLifeMins     = 60
 )
 const (
-	FreeUserTier       = 0
-	PaidUserTier       = 1
-	PermUserTier       = 2
-	CustomCodeUserTier = 3
+	freeUserTier       = 0
+	paidUserTier       = 1
+	permUserTier       = 2
+	customCodeUserTier = 3
 )
 
 const (
-	PermCodeCreditAmt   = 5.0  // once user has this much credit they will have PermUserTier
-	CustomCodeCreditAmt = 10.0 // once user has this much credit they will have CustomCodeUserTier
+	permCodeCreditAmt   = 5.0  // once user has this much credit they will have PermUserTier
+	customCodeCreditAmt = 10.0 // once user has this much credit they will have CustomCodeUserTier
 )
 
 // User structure
@@ -67,28 +67,28 @@ func (user User) UpdateUUIDKey(db *sql.DB) {
 
 // GetTier fetches the user tier level
 func (user *User) GetTier(db *sql.DB) {
-	user.GetCredit(db)
-	user.Tier = FreeUserTier
-	if user.Credit >= CustomCodeCreditAmt {
-		user.Tier = CustomCodeUserTier
-	} else if user.Credit >= PermCodeCreditAmt {
-		user.Tier = PermUserTier
+	user.getCredit(db)
+	user.Tier = freeUserTier
+	if user.Credit >= customCodeCreditAmt {
+		user.Tier = customCodeUserTier
+	} else if user.Credit >= permCodeCreditAmt {
+		user.Tier = permUserTier
 	} else if user.Credit > 0 {
-		user.Tier = PaidUserTier
+		user.Tier = paidUserTier
 	}
 }
 
 // GetMinsAllowed gets the max minutes of account life the user can have
 func (user *User) GetMinsAllowed(db *sql.DB) {
 	user.GetTier(db)
-	if user.Tier == CustomCodeUserTier {
+	if user.Tier == customCodeUserTier {
 		user.MinsAllowed = 60
-	} else if user.Tier == PermUserTier {
+	} else if user.Tier == permUserTier {
 		user.MinsAllowed = 30
-	} else if user.Tier == PaidUserTier {
+	} else if user.Tier == paidUserTier {
 		user.MinsAllowed = 20
 	} else {
-		user.MinsAllowed = DefaultAccountLifeMins
+		user.MinsAllowed = defaultAccountLifeMins
 	}
 }
 
@@ -110,8 +110,8 @@ func (user *User) GetStats(db *sql.DB) {
 // SetWantedMins sets the WantedMins as long as the request is legitimate
 func (user User) SetWantedMins(db *sql.DB, wantedMins int) {
 	user.GetMinsAllowed(db)
-	if wantedMins <= 0 || wantedMins%5 != 0 || wantedMins > MaxAccountLifeMins || wantedMins > user.MinsAllowed {
-		user.WantedMins = DefaultAccountLifeMins
+	if wantedMins <= 0 || wantedMins%5 != 0 || wantedMins > maxAccountLifeMins || wantedMins > user.MinsAllowed {
+		user.WantedMins = defaultAccountLifeMins
 	} else {
 		user.WantedMins = wantedMins
 	}
@@ -133,7 +133,7 @@ func (user User) GetUUIDKey(db *sql.DB) (string, bool) {
 	return key, false
 }
 
-func (user *User) GetCredit(db *sql.DB) {
+func (user *User) getCredit(db *sql.DB) {
 	if user.Credit > 0 {
 		// already set the users credit so don't bother trying again
 		return
@@ -146,18 +146,21 @@ func (user *User) GetCredit(db *sql.DB) {
 	}
 }
 
+// GetBandwidthLeft fetches the amount of bandwidth the user has left for today
 func (user *User) GetBandwidthLeft(db *sql.DB) {
-	user.GetCredit(db)
+	user.getCredit(db)
 	usedBandwidth := getUserUsedBandwidth(db, *user)
 	creditedBandwidth := CreditToBandwidth(user.Credit)
 	user.BandwidthLeft = creditedBandwidth - usedBandwidth
 }
 
+// GetMaxFileSize fetches the maximum file size a user can upload with
 func (user *User) GetMaxFileSize(db *sql.DB) {
-	user.GetCredit(db)
+	user.getCredit(db)
 	user.MaxFileSize = CreditToFileUploadSize(user.Credit)
 }
 
+// GetExpiry fetches the expiry date of the current code
 func (user *User) GetExpiry(db *sql.DB) {
 	result := db.QueryRow(`SELECT code_end_dttm
 	FROM user
@@ -183,6 +186,7 @@ func (user User) IsValid(db *sql.DB) bool {
 	return false
 }
 
+// GetWantedMins fetches the amount of minutes the user wants their code to last for
 func (user *User) GetWantedMins(db *sql.DB) {
 	result := db.QueryRow(`SELECT wanted_mins
 	FROM user
@@ -215,7 +219,7 @@ func getAllDisplayUsers(db *sql.DB) []displayUser {
 
 // CodeToUser converts a users code to a User.
 func CodeToUser(db *sql.DB, code string) (user User) {
-	if len(code) != CodeLen {
+	if len(code) != codeLen {
 		return
 	}
 	result := db.QueryRow(`SELECT UUID, public_key

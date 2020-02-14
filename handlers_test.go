@@ -215,7 +215,7 @@ func TestCodeTimeout(t *testing.T) {
 	message := ReadSocketMessage(ws)
 
 	secondsLeft := math.Floor(message.User.Expiry.Sub(time.Now()).Seconds())
-	estimatedSecondsLeft := DefaultAccountLifeMins*60 - secondHang
+	estimatedSecondsLeft := defaultAccountLifeMins*60 - secondHang
 
 	if estimatedSecondsLeft != int(secondsLeft) && estimatedSecondsLeft-1 != int(secondsLeft) {
 		t.Errorf("Got %v expected %v", secondsLeft, estimatedSecondsLeft)
@@ -223,7 +223,7 @@ func TestCodeTimeout(t *testing.T) {
 }
 
 func TestPermCode(t *testing.T) {
-	_, form := GenCreditUser(PermCodeCreditAmt)
+	_, form := GenCreditUser(permCodeCreditAmt)
 
 	// toggle on perm code
 	rr := PostRequest(form, http.HandlerFunc(s.TogglePermCodeHandler))
@@ -279,7 +279,7 @@ func TestCustomCode(t *testing.T) {
 	var customCode = GenCode(s.db)
 	var user User
 
-	_, form := GenCreditUser(CustomCodeCreditAmt)
+	_, form := GenCreditUser(customCodeCreditAmt)
 
 	// set a custom code
 	form.Set("custom_code", customCode)

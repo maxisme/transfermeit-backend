@@ -58,7 +58,7 @@ func GenCode(db *sql.DB) string {
 	var letters = []rune("ABCDEFGHJKMNPQRSTUVWXYZ23456789")
 
 	for {
-		b := make([]rune, CodeLen)
+		b := make([]rune, codeLen)
 		for i := range b {
 			b[i] = letters[rand.Intn(len(letters))]
 		}
