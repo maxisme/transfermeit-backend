@@ -304,3 +304,34 @@ func TestCustomCode(t *testing.T) {
 		t.Errorf("Should have set custom code %v vs %v", customCode, user.Code)
 	}
 }
+
+var invalidHandlerMethods = []struct {
+	handler       http.HandlerFunc
+	invalidMethod string
+}{
+	{http.HandlerFunc(s.CompletedDownloadHandler), "GET"},
+	{http.HandlerFunc(s.UploadHandler), "GET"},
+	{http.HandlerFunc(s.InitUploadHandler), "GET"},
+	{http.HandlerFunc(s.DownloadHandler), "GET"},
+	{http.HandlerFunc(s.CreateCodeHandler), "GET"},
+	{http.HandlerFunc(s.RegisterCreditHandler), "GET"},
+	{http.HandlerFunc(s.CustomCodeHandler), "GET"},
+	{http.HandlerFunc(s.TogglePermCodeHandler), "GET"},
+	{http.HandlerFunc(s.LiveHandler), "POST"},
+	{http.HandlerFunc(s.WSHandler), "POST"},
+}
+
+// request handlers with incorrect methods
+func TestInvalidHandlerMethods(t *testing.T) {
+	for i, tt := range invalidHandlerMethods {
+		t.Run(string(i), func(t *testing.T) {
+			req, _ := http.NewRequest(tt.invalidMethod, "", nil)
+
+			rr := httptest.NewRecorder()
+			tt.handler.ServeHTTP(rr, req)
+			if rr.Code != 400 {
+				t.Errorf("Should have responded with error code %d not %d", 400, rr.Code)
+			}
+		})
+	}
+}

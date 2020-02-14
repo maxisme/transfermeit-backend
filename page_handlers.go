@@ -30,6 +30,10 @@ type liveContent struct {
 
 // LiveHandler returns a page displaying all historic transfers
 func (s *Server) LiveHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		WriteError(w, r, 400, "Invalid method")
+		return
+	}
 	tmplPath := "web/templates/live.html"
 	tmpl := template.Must(template.ParseFiles(tmplPath))
 	data := liveContent{
