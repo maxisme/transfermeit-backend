@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-var sentryHandler *sentryhttp.Handler = nil
+var sentryHandler *sentryhttp.Handler
 var lmt = tollbooth.NewLimiter(1, &limiter.ExpirableOptions{DefaultExpirationTTL: time.Hour}).SetIPLookups([]string{
 	"RemoteAddr", "X-Forwarded-For", "X-Real-IP",
 })
@@ -50,7 +50,7 @@ func main() {
 	}
 
 	// connect to MySQL db
-	db, err := DBConn(os.Getenv("db") + "/transfermeit?parseTime=true&loc=" + time.Local.String())
+	db, err := dbConn(os.Getenv("db") + "/transfermeit?parseTime=true&loc=" + time.Local.String())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func main() {
 
 	// clean up cron
 	c := cron.New()
-	err = c.AddFunc("@every 1m", s.CleanIncompleteTransfers)
+	err = c.AddFunc("@every 1m", s.CleanExpiredTransfers)
 	if err != nil {
 		log.Fatal(err)
 	}

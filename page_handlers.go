@@ -6,13 +6,13 @@ import (
 	"time"
 )
 
-type DisplayUser struct {
+type displayUser struct {
 	UUID      string
 	PubKey    string
 	Connected bool
 }
 
-type DisplayTransfer struct {
+type displayTransfer struct {
 	ToUUID      string
 	FromUUID    string
 	FileHash    string
@@ -24,16 +24,16 @@ type DisplayTransfer struct {
 }
 
 type liveContent struct {
-	Uploads []DisplayTransfer
-	Users   []DisplayUser
+	Uploads []displayTransfer
+	Users   []displayUser
 }
 
 func (s *Server) LiveHandler(w http.ResponseWriter, r *http.Request) {
 	tmplPath := "web/templates/live.html"
 	tmpl := template.Must(template.ParseFiles(tmplPath))
 	data := liveContent{
-		Users:   GetAllDisplayUsers(s.db),
-		Uploads: GetAllDisplayTransfers(s.db),
+		Users:   getAllDisplayUsers(s.db),
+		Uploads: getAllDisplayTransfers(s.db),
 	}
 	err := tmpl.Execute(w, data)
 	Handle(err)

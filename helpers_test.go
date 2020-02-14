@@ -31,7 +31,7 @@ func InitDB(t *testing.M) {
 	TESTDBNAME := "transfermeit_test"
 
 	// initialise db
-	db, err := DBConn(os.Getenv("db") + "/?multiStatements=True&loc=" + time.Local.String())
+	db, err := dbConn(os.Getenv("db") + "/?multiStatements=True&loc=" + time.Local.String())
 	if err != nil {
 		panic(err.Error())
 	}
@@ -62,7 +62,7 @@ func InitDB(t *testing.M) {
 		panic(err)
 	}
 
-	db, err = DBConn(dbConnStr + "?parseTime=true&loc=" + time.Local.String())
+	db, err = dbConn(dbConnStr + "?parseTime=true&loc=" + time.Local.String())
 	s = Server{db: db}
 
 	code := t.Run() // RUN THE TEST

@@ -159,7 +159,7 @@ func TestUploadDownloadCycle(t *testing.T) {
 	_, _, user2Ws, _ := ConnectWSS(user2, form2)
 	message := ReadSocketMessage(user2Ws)
 	filePath := message.Download.FilePath
-	if len(path.Dir(filePath)) != UserDirLen {
+	if len(path.Dir(filePath)) != userDirLen {
 		t.Fatalf(filePath)
 	}
 	user2Ws.Close()
@@ -185,18 +185,18 @@ func TestUploadDownloadCycle(t *testing.T) {
 		t.Errorf("Got %v expected %v", rr2.Body.String(), password)
 	}
 
-	if _, err := os.Stat(FILEDIR + filePath); err == nil {
-		t.Errorf("'%v' should have been deleted", FILEDIR+filePath)
+	if _, err := os.Stat(FileStoreDirectory + filePath); err == nil {
+		t.Errorf("'%v' should have been deleted", FileStoreDirectory+filePath)
 	}
 
 	message = ReadSocketMessage(user1Ws)
-	if message.User.Bandwidth != FreeBandwidthBytes-fileSize {
-		t.Errorf("expected %v got %v", FreeBandwidthBytes-fileSize, message.User.Bandwidth)
+	if message.User.BandwidthLeft != freeBandwidthBytes-fileSize {
+		t.Errorf("expected %v got %v", freeBandwidthBytes-fileSize, message.User.BandwidthLeft)
 	}
 
 	message = ReadSocketMessage(user1Ws)
 	if message.Message.Title != "Successful Transfer" {
-		t.Errorf("expected: %v got %v", "Successful Transfer", message.User.Bandwidth)
+		t.Errorf("expected: %v got %v", "Successful Transfer", message.User.BandwidthLeft)
 	}
 }
 
@@ -276,7 +276,7 @@ func TestUUIDReset(t *testing.T) {
 }
 
 func TestCustomCode(t *testing.T) {
-	var customCode = GenUserCode(s.db)
+	var customCode = GenCode(s.db)
 	var user User
 
 	_, form := GenCreditUser(CustomCodeCreditAmt)

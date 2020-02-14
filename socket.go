@@ -2,25 +2,31 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/gorilla/websocket"
+	"log"
 	"net/http"
 )
 
+// DesktopMessage structure
 type DesktopMessage struct {
 	Title   string `json:"title"`
 	Message string `json:"message"`
 }
 
+// SocketMessage structure
 type SocketMessage struct {
 	User     *User           `json:"user"`
 	Download *Transfer       `json:"download"`
 	Message  *DesktopMessage `json:"message"`
 }
 
+// IncomingSocketMessage structure
 type IncomingSocketMessage struct {
 	Type    string `json:"type"`
 	Content string `json:"content"`
 }
 
+// WSHandler is the http handler for web socket connections
 func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		WriteError(w, r, 400, "Method not allowed")
@@ -38,7 +44,7 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 		UUIDKey: r.Header.Get("UUID-key"),
 	}
 
-	if !IsValidUserCredentials(s.db, user) {
+	if !user.IsValid(s.db) {
 		WriteError(w, r, 401, "Invalid credentials!")
 		return
 	}
@@ -52,14 +58,14 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	WSClientsMutex.Unlock()
 
 	// mark user as connected in db
-	go UserSocketConnected(s.db, r.Header.Get("UUID"), true)
+	go user.IsConnected(s.db, true)
 
 	// get pending messages
 	PendingSocketMutex.RLock()
 	messages, ok := PendingSocketMessages[Hash(user.UUID)]
 	PendingSocketMutex.RUnlock()
 	if ok {
-		// send pending messages
+		// send pending messages to user
 		for _, message := range messages {
 			SendSocketMessage(message, Hash(user.UUID), false)
 		}
@@ -80,9 +86,9 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 		var mess IncomingSocketMessage
 		Handle(json.Unmarshal(message, &mess))
 		if mess.Type == "keep-alive" {
-			Handle(KeepAliveTransfer(s.db, user, mess.Content))
+			go KeepAliveTransfer(s.db, user, mess.Content)
 		} else if mess.Type == "stats" {
-			SetUserStats(s.db, &user)
+			user.GetStats(s.db)
 			SendSocketMessage(SocketMessage{
 				User: &user,
 			}, user.UUID, true)
@@ -91,10 +97,41 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// mark user as disconnected
-	go UserSocketConnected(s.db, r.Header.Get("UUID"), false)
+	go user.IsConnected(s.db, false)
 
 	// remove client from clients
 	WSClientsMutex.Lock()
 	delete(WSClients, user.UUID)
 	WSClientsMutex.Unlock()
+}
+
+// SendSocketMessage sends a socket message to a connected UUID and stores if not connected
+func SendSocketMessage(message SocketMessage, UUID string, storeOnFail bool) bool {
+	hashUUID := Hash(UUID)
+
+	WSClientsMutex.RLock()
+	socket, ok := WSClients[hashUUID]
+	WSClientsMutex.RUnlock()
+
+	if ok {
+		jsonReply, err := json.Marshal(message)
+		Handle(err)
+		if err = socket.WriteMessage(websocket.TextMessage, jsonReply); err == nil {
+			// successfully sent socket message
+			return true
+		} else {
+			Handle(err)
+		}
+
+	} else {
+		log.Println("UUID not connected to socket: " + hashUUID)
+	}
+
+	if storeOnFail {
+		PendingSocketMutex.Lock()
+		PendingSocketMessages[hashUUID] = append(PendingSocketMessages[hashUUID], message)
+		PendingSocketMutex.Unlock()
+	}
+
+	return false
 }

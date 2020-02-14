@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"github.com/getsentry/sentry-go"
 	"github.com/gorilla/sessions"
-	"github.com/gorilla/websocket"
 	"log"
 	"math"
 	"math/rand"
@@ -26,6 +25,7 @@ var (
 	store      = sessions.NewCookieStore([]byte(os.Getenv("session_key")))
 )
 
+// Handle handles errors and logs them to sentry
 func Handle(err error) {
 	if err != nil {
 		pc, _, ln, _ := runtime.Caller(1)
@@ -38,9 +38,10 @@ func Handle(err error) {
 	}
 }
 
+// UpdateErr returns an error if no rows have been effected
 func UpdateErr(res sql.Result, err error) error {
-	Handle(err)
 	if err != nil {
+		Handle(err)
 		return err
 	}
 
@@ -52,6 +53,23 @@ func UpdateErr(res sql.Result, err error) error {
 	return err
 }
 
+// GenCode creates a random capitalized string of CodeLen and verifies it doesn't already exist
+func GenCode(db *sql.DB) string {
+	var letters = []rune("ABCDEFGHJKMNPQRSTUVWXYZ23456789")
+
+	for {
+		b := make([]rune, CodeLen)
+		for i := range b {
+			b[i] = letters[rand.Intn(len(letters))]
+		}
+		code := string(b)
+		if !codeExists(db, code) {
+			return code
+		}
+	}
+}
+
+// RandomString generates a random string
 func RandomString(n int) string {
 	var letter = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 
@@ -62,6 +80,7 @@ func RandomString(n int) string {
 	return string(b)
 }
 
+// Hash hashes a string
 func Hash(str string) string {
 	out, err := b64.StdEncoding.DecodeString(str)
 	if err == nil && len(out) > 1 {
@@ -72,20 +91,23 @@ func Hash(str string) string {
 	return string(b64.StdEncoding.EncodeToString(v[:]))
 }
 
+// MegabytesToBytes converts MB to bytes
 func MegabytesToBytes(megabytes float64) int {
 	return int(megabytes * 1000000)
 }
 
+// BytesToMegabytes converts bytes to MB
 func BytesToMegabytes(bytes int) float64 {
 	return float64(bytes / 1000000)
 }
 
+// CreditToBandwidth converts user credit to user max file upload size
 func CreditToFileUploadSize(credit float64) (bytes int) {
-	bytes = FreeFileUploadBytes
+	bytes = freeFileUploadBytes
 	for {
 		if credit > 0 {
-			bytes += FreeFileUploadBytes
-			credit -= CreditSteps
+			bytes += freeFileUploadBytes
+			credit -= creditSteps
 			continue
 		}
 		break
@@ -93,12 +115,13 @@ func CreditToFileUploadSize(credit float64) (bytes int) {
 	return
 }
 
+// CreditToBandwidth converts user credit to user bandwidth
 func CreditToBandwidth(credit float64) (bytes int) {
-	bytes = FreeBandwidthBytes
+	bytes = freeBandwidthBytes
 	for {
 		if credit > 0 {
-			bytes += FreeBandwidthBytes
-			credit -= CreditSteps
+			bytes += freeBandwidthBytes
+			credit -= creditSteps
 			continue
 		}
 		break
@@ -106,7 +129,8 @@ func CreditToBandwidth(credit float64) (bytes int) {
 	return
 }
 
-func WriteJson(w http.ResponseWriter, v interface{}) error {
+// WriteJSON writes JSON response
+func WriteJSON(w http.ResponseWriter, v interface{}) error {
 	jsonReply, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -116,6 +140,7 @@ func WriteJson(w http.ResponseWriter, v interface{}) error {
 	return err
 }
 
+// WriteError will write a http.Error as well as logging the error locally and to Sentry
 func WriteError(w http.ResponseWriter, r *http.Request, code int, message string) {
 	// find where this function has been called from
 	pc, _, line, _ := runtime.Caller(1)
@@ -137,46 +162,19 @@ func WriteError(w http.ResponseWriter, r *http.Request, code int, message string
 	w.Write([]byte(message))
 }
 
-func SendSocketMessage(message SocketMessage, UUID string, storeOnFail bool) bool {
-	hashUUID := Hash(UUID)
-
-	WSClientsMutex.RLock()
-	socket, ok := WSClients[hashUUID]
-	WSClientsMutex.RUnlock()
-
-	if ok {
-		jsonReply, err := json.Marshal(message)
-		Handle(err)
-		if err = socket.WriteMessage(websocket.TextMessage, jsonReply); err == nil {
-			// successfully sent socket message
-			return true
-		} else {
-			Handle(err)
-		}
-
-	} else {
-		log.Println("No such UUID: " + hashUUID)
-	}
-
-	if storeOnFail {
-		PendingSocketMutex.Lock()
-		PendingSocketMessages[hashUUID] = append(PendingSocketMessages[hashUUID], message)
-		PendingSocketMutex.Unlock()
-	}
-
-	return false
-}
-
+// InitSession initiates a http session
 func InitSession(r *http.Request) *sessions.Session {
 	if appSession != nil {
+		// there already is a global session so use that
 		return appSession
 	}
 	session, err := store.Get(r, uploadSessionName)
-	appSession = session
+	appSession = session // set global session
 	Handle(err)
 	return session
 }
 
+// BytesToReadable converts bytes to a readable string (MB, GB, etc...)
 func BytesToReadable(bytes int) string {
 	if bytes == 0 {
 		return "0 bytes"

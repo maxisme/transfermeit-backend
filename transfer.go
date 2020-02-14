@@ -13,12 +13,12 @@ import (
 )
 
 const (
-	MaxFileUploadSizeMB = 5000
-	FreeFileUploadBytes = 250000000
-	FreeBandwidthBytes  = FreeFileUploadBytes * 10
+	maxFileUploadSizeMB = 5000
+	freeFileUploadBytes = 250000000
+	freeBandwidthBytes  = freeFileUploadBytes * 10
 
-	CreditSteps = 0.5
-	UserDirLen  = 50
+	creditSteps = 0.5
+	userDirLen  = 50
 )
 
 var (
@@ -26,7 +26,7 @@ var (
 	PendingSocketMutex    = sync.RWMutex{}
 )
 
-var FILEDIR = os.Getenv("file_dir")
+var FileStoreDirectory = os.Getenv("file_dir")
 
 type Transfer struct {
 	ID       int       `json:"-"`
@@ -39,7 +39,9 @@ type Transfer struct {
 	expiry   time.Time `json:"-"`
 }
 
-func GetTransferPasswordAndUUID(db *sql.DB, transfer Transfer) (password string, UUID string) {
+// GetPasswordAndUUID fetches the password for the transfer and the UUID of the sending user
+// based on the UUID of the destination user the filepath of the transfer and the file hash
+func (transfer *Transfer) GetPasswordAndUUID(db *sql.DB) {
 	result := db.QueryRow(`
 	SELECT password, from_UUID
 	FROM transfer
@@ -47,15 +49,11 @@ func GetTransferPasswordAndUUID(db *sql.DB, transfer Transfer) (password string,
 	AND to_UUID = ?
 	AND file_path = ?
 	AND file_hash = ?`, Hash(transfer.to.UUID), transfer.FilePath, transfer.hash)
-	if err := result.Scan(&password, &UUID); err != nil {
-		Handle(err)
-		return "", ""
-	}
-	return password, UUID
+	Handle(result.Scan(&transfer.password, &transfer.from.UUID))
 }
 
-// validate user isn't already transferring a file to the same friend
-func IsAlreadyTransferring(db *sql.DB, transfer *Transfer) bool {
+// GetLiveFilePath fetches the file path between two users
+func (transfer *Transfer) GetLiveFilePath(db *sql.DB) {
 	result := db.QueryRow(`
 	SELECT file_path
     FROM transfer
@@ -63,27 +61,11 @@ func IsAlreadyTransferring(db *sql.DB, transfer *Transfer) bool {
     AND to_UUID = ?
     AND finished_dttm IS NULL
     LIMIT 1`, Hash(transfer.from.UUID), Hash(transfer.to.UUID))
-	err := result.Scan(&transfer.FilePath)
-	return err == nil
+	_ = result.Scan(&transfer.FilePath)
 }
 
-// UUID and path are currently waiting to be downloaded
-func AllowedToDownloadPath(db *sql.DB, user User, filePath string) bool {
-	var id int
-	result := db.QueryRow(`
-	SELECT id
-    FROM transfer
-	WHERE to_UUID = ?
-	AND file_path = ?
-    AND finished_dttm IS NULL`, Hash(user.UUID), filePath)
-	_ = result.Scan(&id)
-	if id > 0 {
-		return true
-	}
-	return false
-}
-
-func InsertTransfer(db *sql.DB, transfer Transfer) int {
+// InitialStore stores the from_UUID and to_UUID in the transfer table as placeholders
+func (transfer Transfer) InitialStore(db *sql.DB) int {
 	res, err := db.Exec(`
 	INSERT into transfer (from_UUID, to_UUID)
 	VALUES (?, ?)`, Hash(transfer.from.UUID), Hash(transfer.to.UUID))
@@ -93,23 +75,27 @@ func InsertTransfer(db *sql.DB, transfer Transfer) int {
 	return int(ID)
 }
 
-func UpdateTransfer(db *sql.DB, transfer Transfer) error {
+// Store stores the full information of the transfer based on the ID from InitialStore
+func (transfer Transfer) Store(db *sql.DB) error {
 	return UpdateErr(db.Exec(`
 	UPDATE transfer 
 	SET size=?, file_hash=?, file_path=?, password=?, expiry_dttm=?, updated_dttm=NOW()
 	WHERE id=?`, transfer.Size, transfer.hash, transfer.FilePath, transfer.password, transfer.expiry, transfer.ID))
 }
 
-func KeepAliveTransfer(db *sql.DB, user User, path string) error {
-	return UpdateErr(db.Exec(`
+// KeepAliveTransfer will update the updated_dttm of the transfer to prevent the cleanup CleanExpiredTransfers()
+// from executing while still downloading
+func KeepAliveTransfer(db *sql.DB, user User, path string) {
+	Handle(UpdateErr(db.Exec(`
 	UPDATE transfer 
 	SET updated_dttm=NOW()
 	WHERE file_path=?
 	AND to_UUID
-	OR from_UUID`, path, Hash(user.UUID), Hash(user.UUID)))
+	OR from_UUID`, path, Hash(user.UUID), Hash(user.UUID))))
 }
 
-func CompleteTransfer(db *sql.DB, transfer Transfer, failed bool, expired bool) {
+// Completed will mark a transfer as completed and return the state back to the user over socket message.
+func (transfer Transfer) Completed(db *sql.DB, failed bool, expired bool) {
 	err := UpdateErr(db.Exec(`
 	UPDATE transfer 
 	SET file_path = NULL, finished_dttm = NOW(), password = NULL, failed = ?
@@ -118,7 +104,7 @@ func CompleteTransfer(db *sql.DB, transfer Transfer, failed bool, expired bool) 
 	AND file_path = ?`, failed, Hash(transfer.from.UUID), Hash(transfer.to.UUID), transfer.FilePath))
 	Handle(err)
 
-	go DeleteUploadDir(transfer.FilePath)
+	go deleteUploadDir(transfer.FilePath)
 
 	message := DesktopMessage{}
 	if expired {
@@ -133,7 +119,7 @@ func CompleteTransfer(db *sql.DB, transfer Transfer, failed bool, expired bool) 
 
 		// send user stats update to sender
 		fromUser := User{UUID: transfer.from.UUID}
-		SetUserStats(db, &fromUser)
+		fromUser.GetStats(db)
 		SendSocketMessage(SocketMessage{
 			User: &fromUser,
 		}, transfer.from.UUID, true)
@@ -142,20 +128,25 @@ func CompleteTransfer(db *sql.DB, transfer Transfer, failed bool, expired bool) 
 	SendSocketMessage(SocketMessage{Message: &message}, transfer.from.UUID, true)
 }
 
-// remove uploaded directory
-func DeleteUploadDir(filePath string) bool {
-	dir := path.Dir(FILEDIR + filePath)
-	if err := os.RemoveAll(dir); err != nil {
-		_ = os.Remove(dir)
-		Handle(err)
-		return false
+// AllowedToDownload verifies that the download request is legitimate
+func AllowedToDownload(db *sql.DB, user User, filePath string) bool {
+	var id int
+	result := db.QueryRow(`
+	SELECT id
+    FROM transfer
+	WHERE to_UUID = ?
+	AND file_path = ?
+    AND finished_dttm IS NULL`, Hash(user.UUID), filePath)
+	_ = result.Scan(&id)
+	if id > 0 {
+		return true
 	}
-	return true
+	return false
 }
 
-func (s *Server) CleanIncompleteTransfers() {
-	log.Println("STARTED TRANSFER CLEANUP")
-
+// CleanExpiredTransfers removes transfers which have exceeded the length of time they are allowed to be hosted on the
+// server
+func (s *Server) CleanExpiredTransfers() {
 	// find and remove all expired uploads
 	rows, err := s.db.Query(`
 	SELECT id, file_path, to_UUID, from_UUID
@@ -171,17 +162,20 @@ func (s *Server) CleanIncompleteTransfers() {
 		var transfer Transfer
 		err := rows.Scan(&transfer.ID, &transfer.FilePath, &transfer.to.UUID, &transfer.from.UUID)
 		Handle(err)
-		CompleteTransfer(s.db, transfer, true, true)
+		go transfer.Completed(s.db, true, true)
 		cnt += 1
 	}
+	rows.Close()
 
-	log.Println("FINISHED CLEANUP - deleted " + strconv.Itoa(cnt) + " rows")
+	if cnt > 0 {
+		log.Println("Deleted " + strconv.Itoa(cnt) + " transfers")
+	}
 }
 
-func GetAllDisplayTransfers(db *sql.DB) []DisplayTransfer {
-	var transfers []DisplayTransfer
+func getAllDisplayTransfers(db *sql.DB) []displayTransfer {
+	var transfers []displayTransfer
 	if u, found := c.Get("transfers"); found {
-		transfers = u.([]DisplayTransfer)
+		transfers = u.([]displayTransfer)
 	} else {
 		log.Println("Refreshed transfer cache")
 		// fetch transfers from db if not in cache
@@ -192,7 +186,7 @@ func GetAllDisplayTransfers(db *sql.DB) []DisplayTransfer {
 		Handle(err)
 		for rows.Next() {
 			var (
-				dt       DisplayTransfer
+				dt       displayTransfer
 				fileSize int
 				updated  mysql.NullTime
 				finished mysql.NullTime
@@ -207,4 +201,14 @@ func GetAllDisplayTransfers(db *sql.DB) []DisplayTransfer {
 		c.Set("transfers", transfers, cache.DefaultExpiration)
 	}
 	return transfers
+}
+
+func deleteUploadDir(filePath string) bool {
+	dir := path.Dir(FileStoreDirectory + filePath)
+	if err := os.RemoveAll(dir); err != nil {
+		_ = os.Remove(dir)
+		Handle(err)
+		return false
+	}
+	return true
 }
