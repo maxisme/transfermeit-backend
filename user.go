@@ -8,7 +8,7 @@ import (
 )
 
 const codeLen = 7
-const UUIDKeyLen = 200
+const keyUUIDLen = 200
 const (
 	defaultAccountLifeMins = 10
 	maxAccountLifeMins     = 60

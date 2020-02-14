@@ -192,7 +192,7 @@ func (s *Server) CreateCodeHandler(w http.ResponseWriter, r *http.Request) {
 	} else if !userExists {
 		// create new tmi user
 		log.Println("Creating new user " + user.UUID)
-		user.UUIDKey = RandomString(UUIDKeyLen)
+		user.UUIDKey = RandomString(keyUUIDLen)
 		user.MaxFileSize = freeFileUploadBytes
 		user.BandwidthLeft = freeBandwidthBytes
 		user.MinsAllowed = defaultAccountLifeMins
@@ -204,7 +204,7 @@ func (s *Server) CreateCodeHandler(w http.ResponseWriter, r *http.Request) {
 			// if key has been removed from db because of lost UUID key from client
 			log.Println("Resetting UUID key for " + user.UUID)
 
-			user.UUIDKey = RandomString(UUIDKeyLen)
+			user.UUIDKey = RandomString(keyUUIDLen)
 			go user.UpdateUUIDKey(s.db)
 		} else {
 			user.UUIDKey = ""
