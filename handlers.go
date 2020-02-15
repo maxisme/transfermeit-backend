@@ -256,29 +256,29 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 	code := r.Form.Get("code")
 	friend := CodeToUser(s.db, code)
 	if friend.UUID == "" || friend.PublicKey == "" {
-		WriteError(w, r, 401, "Your friend does not exist!")
+		WriteError(w, r, 402, "Your friend does not exist!")
 		return
 	}
 
 	if friend.UUID == Hash(user.UUID) {
-		WriteError(w, r, 402, "Your can't send files to yourself!")
+		WriteError(w, r, 403, "Your can't send files to yourself!")
 		return
 	}
 
 	user.GetWantedMins(s.db)
-	user.GetMaxFileSize(s.db)
-	user.GetBandwidthLeft(s.db)
 
+	user.GetBandwidthLeft(s.db)
+	if user.BandwidthLeft-filesize < 0 {
+		WriteError(w, r, 404, "This transfer exceeds today's bandwidth limit!")
+		return
+	}
+
+	user.GetMaxFileSize(s.db)
 	if user.MaxFileSize-filesize < 0 {
 		log.Printf("transfer with %v difference", BytesToMegabytes(user.MaxFileSize-filesize))
 		mb := BytesToMegabytes(user.MaxFileSize)
 		m := fmt.Sprintf("This transfer exceeds your %fMB max file transfer Size!", mb)
-		WriteError(w, r, 401, m)
-		return
-	}
-
-	if user.BandwidthLeft-filesize < 0 {
-		WriteError(w, r, 401, "This transfer exceeds today's bandwidth limit!")
+		WriteError(w, r, 405, m)
 		return
 	}
 
@@ -291,7 +291,7 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 	transfer.GetLiveFilePath(s.db)
 	if len(transfer.FilePath) > 0 {
 		// already uploading to friend so delete the currently in process transfer
-		log.Println("Already uploading file from " + transfer.from.UUID + " to " + transfer.to.UUID)
+		log.Print("jnkafsdfjsdnklfndskfadsfla")
 		go transfer.Completed(s.db, true, false)
 	}
 

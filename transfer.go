@@ -58,8 +58,7 @@ func (transfer *Transfer) GetLiveFilePath(db *sql.DB) {
     FROM transfer
     WHERE from_UUID = ?
     AND to_UUID = ?
-    AND finished_dttm IS NULL
-    LIMIT 1`, Hash(transfer.from.UUID), Hash(transfer.to.UUID))
+    AND finished_dttm IS NULL`, Hash(transfer.from.UUID), Hash(transfer.to.UUID))
 	_ = result.Scan(&transfer.FilePath)
 }
 

@@ -149,8 +149,19 @@ func TestInvalidUploadFileSizeVariable(t *testing.T) {
 	user1, form1 := genUser()
 	form1.Set("UUID_key", user1.UUIDKey)
 	rr := postRequest(form1, http.HandlerFunc(s.InitUploadHandler))
-	if rr.Code != 401 {
+	if rr.Code != 401 { // TODO test body
 		t.Errorf("expected: %d got %d - %s", 401, rr.Code, rr.Body.String())
+	}
+}
+
+func TestUploadToNonExistingFriend(t *testing.T) {
+	user1, form1 := genUser()
+	form1.Set("UUID_key", user1.UUIDKey)
+	form1.Set("filesize", strconv.Itoa(123))
+	form1.Set("code", RandomString(codeLen))
+	rr := postRequest(form1, http.HandlerFunc(s.InitUploadHandler))
+	if rr.Code != 402 { // TODO test body
+		t.Errorf("expected: %d got %d - %s", 402, rr.Code, rr.Body.String())
 	}
 }
 
@@ -160,8 +171,37 @@ func TestInvalidSendUploadToSelf(t *testing.T) {
 	form1.Set("filesize", strconv.Itoa(123))
 	form1.Set("code", user1.Code)
 	rr := postRequest(form1, http.HandlerFunc(s.InitUploadHandler))
-	if rr.Code != 402 {
-		t.Errorf("expected: %d got %d - %s", 402, rr.Code, rr.Body.String())
+	if rr.Code != 403 { // TODO test body
+		t.Errorf("expected: %d got %d - %s", 403, rr.Code, rr.Body.String())
+	}
+}
+
+func TestExceedBandwidth(t *testing.T) {
+	// TODO
+}
+
+func TestTooLargeUpload(t *testing.T) {
+	user1, form1 := genUser()
+	user2, _ := genUser()
+	form1.Set("UUID_key", user1.UUIDKey)
+	form1.Set("filesize", strconv.Itoa(freeFileUploadBytes+1))
+	form1.Set("code", user2.Code)
+	rr := postRequest(form1, http.HandlerFunc(s.InitUploadHandler))
+	if rr.Code != 405 { // TODO test body
+		t.Errorf("expected: %d got %d - %s", 405, rr.Code, rr.Body.String())
+	}
+}
+
+func TestTwoPendingTransfers(t *testing.T) {
+	user1, form1 := genUser()
+	user2, _ := genUser()
+	rr := initUpload(form1, user1, user2, 10)
+	if rr.Code != 200 {
+		t.Errorf("initUpload1 expected: %d got %d - %s", 200, rr.Code, rr.Body.String())
+	}
+	rr = initUpload(form1, user1, user2, 10)
+	if rr.Code != 405 {
+		t.Errorf("expected: %d got %d - %s", 405, rr.Code, rr.Body.String())
 	}
 }
 
