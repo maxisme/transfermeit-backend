@@ -6,7 +6,6 @@ import (
 	"os"
 	"path"
 	"strconv"
-	"sync"
 	"time"
 )
 
@@ -19,16 +18,11 @@ const (
 	userDirLen  = 50
 )
 
-var (
-	pendingSocketMessages = map[string][]SocketMessage{}
-	pendingSocketMutex    = sync.RWMutex{}
-)
-
 var fileStoreDirectory = os.Getenv("file_dir")
 
 // Transfer structure
 type Transfer struct {
-	ID       int       `json:"-"`
+	ID       int64     `json:"-"`
 	FilePath string    `json:"file_path"`
 	Size     int       `json:"file_size"`
 	from     User      `json:"-"`
@@ -51,26 +45,28 @@ func (transfer *Transfer) GetPasswordAndUUID(db *sql.DB) {
 	Handle(result.Scan(&transfer.password, &transfer.from.UUID))
 }
 
-// GetLiveFilePath fetches the file path between two users
-func (transfer *Transfer) GetLiveFilePath(db *sql.DB) {
+// AlreadyToUser returns true if already transferring between two users
+func (transfer *Transfer) AlreadyToUser(db *sql.DB) bool {
+	var id int64
 	result := db.QueryRow(`
-	SELECT file_path
+	SELECT id
     FROM transfer
     WHERE from_UUID = ?
     AND to_UUID = ?
     AND finished_dttm IS NULL`, Hash(transfer.from.UUID), Hash(transfer.to.UUID))
-	_ = result.Scan(&transfer.FilePath)
+	_ = result.Scan(&id)
+	return id > 0
 }
 
 // InitialStore stores the from_UUID and to_UUID in the transfer table as placeholders
-func (transfer Transfer) InitialStore(db *sql.DB) int {
+func (transfer Transfer) InitialStore(db *sql.DB) int64 {
 	res, err := db.Exec(`
 	INSERT into transfer (from_UUID, to_UUID)
 	VALUES (?, ?)`, Hash(transfer.from.UUID), Hash(transfer.to.UUID))
 	Handle(err)
 	ID, err := res.LastInsertId()
 	Handle(err)
-	return int(ID)
+	return ID
 }
 
 // Store stores the full information of the transfer based on the ID from InitialStore
@@ -109,7 +105,7 @@ func (transfer Transfer) Completed(db *sql.DB, failed bool, expired bool) {
 		message.Title = "Expired Transfer!"
 		message.Message = "Your file was not downloaded in time!"
 	} else if failed {
-		message.Title = "Unsuccessful Transfer"
+		message.Title = "Cancelled Transfer"
 		message.Message = "Your friend may have ignored the transfer!"
 	} else {
 		message.Title = "Successful Transfer"
@@ -118,12 +114,12 @@ func (transfer Transfer) Completed(db *sql.DB, failed bool, expired bool) {
 		// send user stats update to sender
 		fromUser := User{UUID: transfer.from.UUID}
 		fromUser.GetStats(db)
-		SendSocketMessage(SocketMessage{
+		go WSConns.Write(SocketMessage{
 			User: &fromUser,
 		}, transfer.from.UUID, true)
 	}
 
-	SendSocketMessage(SocketMessage{Message: &message}, transfer.from.UUID, true)
+	go WSConns.Write(SocketMessage{Message: &message}, transfer.from.UUID, true)
 }
 
 // AllowedToDownload verifies that the download request is legitimate

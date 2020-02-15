@@ -154,7 +154,7 @@ func removeUUIDKey(form url.Values) {
 	`, Hash(form.Get("UUID")))))
 }
 
-func upload(t *testing.T, user1 User, user2 User, form1 url.Values, user1Ws *websocket.Conn, fileSize int) string {
+func upload(t *testing.T, user1 User, user2 User, form1 url.Values, fileSize int) string {
 
 	////////////
 	// UPLOAD //

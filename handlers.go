@@ -11,14 +11,10 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
 var (
-	clientsWS      = make(map[string]*websocket.Conn)
-	clientsWSMutex = sync.RWMutex{}
-
 	upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
@@ -288,10 +284,8 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 		Size: filesize,
 	}
 
-	transfer.GetLiveFilePath(s.db)
-	if len(transfer.FilePath) > 0 {
+	if transfer.AlreadyToUser(s.db) {
 		// already uploading to friend so delete the currently in process transfer
-		log.Print("jnkafsdfjsdnklfndskfadsfla")
 		go transfer.Completed(s.db, true, false)
 	}
 
@@ -377,7 +371,7 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	Handle(transfer.Store(s.db))
 
 	// tell friend to download file
-	SendSocketMessage(SocketMessage{
+	WSConns.Write(SocketMessage{
 		Download: &transfer,
 	}, transfer.to.UUID, true)
 }

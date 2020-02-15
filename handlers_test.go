@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"log"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -98,7 +99,7 @@ func TestUploadDownloadCycle(t *testing.T) {
 
 	// UPLOAD
 	fileSize := MegabytesToBytes(10)
-	password := upload(t, user1, user2, form1, user1Ws, fileSize)
+	password := upload(t, user1, user2, form1, fileSize)
 
 	// DOWNLOAD
 
@@ -195,13 +196,15 @@ func TestTooLargeUpload(t *testing.T) {
 func TestTwoPendingTransfers(t *testing.T) {
 	user1, form1 := genUser()
 	user2, _ := genUser()
-	rr := initUpload(form1, user1, user2, 10)
-	if rr.Code != 200 {
-		t.Errorf("initUpload1 expected: %d got %d - %s", 200, rr.Code, rr.Body.String())
-	}
-	rr = initUpload(form1, user1, user2, 10)
-	if rr.Code != 405 {
-		t.Errorf("expected: %d got %d - %s", 405, rr.Code, rr.Body.String())
+	_, _, ws, _ := connectWSS(user1, form1)
+
+	_ = initUpload(form1, user1, user2, 10)
+	_ = initUpload(form1, user1, user2, 10)
+
+	m := readSocketMessage(ws)
+	expected := "Cancelled Transfer"
+	if m.Message.Title != expected {
+		t.Errorf("expected: %s got %s", expected, m.Message.Title)
 	}
 }
 

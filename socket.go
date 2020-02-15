@@ -5,6 +5,7 @@ import (
 	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
+	"sync"
 )
 
 // DesktopMessage structure
@@ -26,10 +27,41 @@ type IncomingSocketMessage struct {
 	Content string `json:"content"`
 }
 
+type PendingMessagesMutex struct {
+	messages map[string][]SocketMessage
+	sync.RWMutex
+}
+
+type Funnel struct {
+	conn *websocket.Conn
+	sync.RWMutex
+}
+
+type Funnels struct {
+	conns map[string]*Funnel
+	sync.RWMutex
+}
+
+// WSConns stores all connected web sockets
+var WSConns = Funnels{make(map[string]*Funnel), sync.RWMutex{}}
+
+var PendingMessages = PendingMessagesMutex{make(map[string][]SocketMessage), sync.RWMutex{}}
+
 // WSHandler is the http handler for web socket connections
 func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		WriteError(w, r, 400, "Method not allowed")
+		return
+	}
+
+	var user = User{
+		UUID:    r.Header.Get("UUID"),
+		UUIDKey: r.Header.Get("UUID-key"),
+	}
+	UUIDHash := Hash(user.UUID)
+
+	if !user.IsValid(s.db) {
+		WriteError(w, r, 401, "Invalid credentials!")
 		return
 	}
 
@@ -39,42 +71,33 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var user = User{
-		UUID:    r.Header.Get("UUID"),
-		UUIDKey: r.Header.Get("UUID-key"),
-	}
-
-	if !user.IsValid(s.db) {
-		WriteError(w, r, 401, "Invalid credentials!")
-		return
-	}
-
 	// connect to socket
-	wsconn, _ := upgrader.Upgrade(w, r, nil)
+	wsconn, err := upgrader.Upgrade(w, r, nil)
+	Handle(err)
+	f := Funnel{}
+	f.conn = wsconn
 
 	// add web socket connection to list of clients
-	clientsWSMutex.Lock()
-	clientsWS[Hash(user.UUID)] = wsconn
-	clientsWSMutex.Unlock()
+	WSConns.AddConn(UUIDHash, &f)
 
 	// mark user as connected in db
 	go user.IsConnected(s.db, true)
 
-	// get pending messages
-	pendingSocketMutex.RLock()
-	messages, ok := pendingSocketMessages[Hash(user.UUID)]
-	pendingSocketMutex.RUnlock()
+	// write pending messages
+	PendingMessages.RLock()
+	messages, ok := PendingMessages.messages[UUIDHash]
+	PendingMessages.RUnlock()
 	if ok {
 		// send pending messages to user
 		for _, message := range messages {
-			SendSocketMessage(message, Hash(user.UUID), false)
+			go Handle(f.Write(message))
 		}
-
-		// delete any pending socket messages
-		pendingSocketMutex.Lock()
-		delete(pendingSocketMessages, Hash(user.UUID))
-		pendingSocketMutex.Unlock()
 	}
+
+	// delete pending socket messages
+	PendingMessages.Lock()
+	delete(PendingMessages.messages, UUIDHash)
+	PendingMessages.Unlock()
 
 	// incoming socket messages
 	for {
@@ -89,7 +112,7 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 			go KeepAliveTransfer(s.db, user, mess.Content)
 		} else if mess.Type == "stats" {
 			user.GetStats(s.db)
-			SendSocketMessage(SocketMessage{
+			WSConns.Write(SocketMessage{
 				User: &user,
 			}, user.UUID, true)
 		}
@@ -100,23 +123,27 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	go user.IsConnected(s.db, false)
 
 	// remove client from clients
-	clientsWSMutex.Lock()
-	delete(clientsWS, user.UUID)
-	clientsWSMutex.Unlock()
+	WSConns.RemConn(UUIDHash)
 }
 
-// SendSocketMessage sends a socket message to a connected UUID and stores if not connected
-func SendSocketMessage(message SocketMessage, UUID string, storeOnFail bool) bool {
+func (funnel *Funnel) Write(message interface{}) error {
+	jsonReply, err := json.Marshal(message)
+	if err != nil {
+		return err
+	}
+	funnel.Lock()
+	err = funnel.conn.WriteMessage(websocket.TextMessage, jsonReply)
+	funnel.Unlock()
+	return err
+}
+
+// Write sends a socket message to a connected UUID and stores if not connected
+func (conns *Funnels) Write(message SocketMessage, UUID string, storeOnFail bool) bool {
 	hashUUID := Hash(UUID)
 
-	clientsWSMutex.RLock()
-	socket, ok := clientsWS[hashUUID]
-	clientsWSMutex.RUnlock()
-
+	socket, ok := conns.GetConn(hashUUID)
 	if ok {
-		jsonReply, err := json.Marshal(message)
-		Handle(err)
-		err = socket.WriteMessage(websocket.TextMessage, jsonReply)
+		err := socket.Write(message)
 		if err == nil {
 			// successfully sent socket message
 			return true
@@ -127,10 +154,29 @@ func SendSocketMessage(message SocketMessage, UUID string, storeOnFail bool) boo
 	}
 
 	if storeOnFail {
-		pendingSocketMutex.Lock()
-		pendingSocketMessages[hashUUID] = append(pendingSocketMessages[hashUUID], message)
-		pendingSocketMutex.Unlock()
+		PendingMessages.Lock()
+		PendingMessages.messages[hashUUID] = append(PendingMessages.messages[hashUUID], message)
+		PendingMessages.Unlock()
 	}
 
 	return false
+}
+
+func (conns *Funnels) GetConn(key string) (*Funnel, bool) {
+	conns.RLock()
+	socket, ok := conns.conns[key]
+	conns.RUnlock()
+	return socket, ok
+}
+
+func (conns *Funnels) AddConn(key string, funnel *Funnel) {
+	conns.Lock()
+	conns.conns[key] = funnel
+	conns.Unlock()
+}
+
+func (conns *Funnels) RemConn(key string) {
+	conns.Lock()
+	delete(conns.conns, key)
+	conns.Unlock()
 }
