@@ -32,12 +32,8 @@ then
     git checkout master
     git merge $1
 
-    # update schema (-database arg came from docker-compose)
-    if ! migrate -source=file://sql/ -database mysql://transfermeit:transfermeit@/transfermeit up
-    then
-        echo "Failed to run sql migration"
-        exit 1
-    fi
+    # run migrations on db
+    docker-compose run migrate
 
     # update app
     if ! docker-compose build app
