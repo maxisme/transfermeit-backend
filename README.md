@@ -1,4 +1,4 @@
-<p align="center"><img height="150px" src="https://github.com/maxisme/transferme.it/raw/master/public_html/images/og_logo.png"></p>
+<p align="center"><img height="150px" src="https://github.com/maxisme/transferme.it/raw/master/images/og_logo.png"></p>
 
 # [transferme.it](https://transferme.it/)
 
