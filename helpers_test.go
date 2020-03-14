@@ -37,7 +37,7 @@ func initDB(t *testing.M) {
 	TESTDBNAME := "transfermeit_test"
 
 	// initialise db
-	db, err := dbConn(os.Getenv("db") + "/?multiStatements=True&loc=" + time.Local.String())
+	db, err := dbConn(os.Getenv("db") + "/?multiStatements=True")
 	if err != nil {
 		panic(err.Error())
 	}
