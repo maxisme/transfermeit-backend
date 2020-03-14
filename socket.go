@@ -90,7 +90,7 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	if ok {
 		// send pending messages to user
 		for _, message := range messages {
-			go Handle(f.Write(message))
+			go f.Write(message)
 		}
 	}
 
@@ -111,7 +111,7 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 		if mess.Type == "keep-alive" {
 			go KeepAliveTransfer(s.db, user, mess.Content)
 		} else if mess.Type == "stats" {
-			user.GetStats(s.db)
+			user.SetStats(s.db)
 			WSConns.Write(SocketMessage{
 				User: &user,
 			}, user.UUID, true)

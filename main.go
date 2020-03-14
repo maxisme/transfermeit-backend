@@ -4,8 +4,11 @@ import (
 	"github.com/TV4/graceful"
 	"github.com/didip/tollbooth"
 	"github.com/didip/tollbooth/limiter"
+	"github.com/didip/tollbooth_chi"
 	"github.com/getsentry/sentry-go"
 	sentryhttp "github.com/getsentry/sentry-go/http"
+	"github.com/go-chi/chi"
+	"github.com/joho/godotenv"
 	"github.com/patrickmn/go-cache"
 	"github.com/robfig/cron"
 	"log"
@@ -14,12 +17,11 @@ import (
 	"time"
 )
 
-var sentryHandler *sentryhttp.Handler
-var lmt = tollbooth.NewLimiter(1, &limiter.ExpirableOptions{DefaultExpirationTTL: time.Hour}).SetIPLookups([]string{
+var lmt = tollbooth.NewLimiter(2, &limiter.ExpirableOptions{DefaultExpirationTTL: time.Hour}).SetIPLookups([]string{
 	"RemoteAddr", "X-Forwarded-For", "X-Real-IP",
 })
 
-func secKeyHandlerWrapper(next http.Handler) http.Handler {
+func ServerKeyHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Sec-Key") != os.Getenv("server_key") {
 			WriteError(w, r, 400, "Invalid form data")
@@ -29,25 +31,22 @@ func secKeyHandlerWrapper(next http.Handler) http.Handler {
 	})
 }
 
-func customCallback(nextFunc func(http.ResponseWriter, *http.Request)) http.Handler {
-	var h = secKeyHandlerWrapper(tollbooth.LimitFuncHandler(lmt, nextFunc))
-	if sentryHandler != nil {
-		return sentryHandler.Handle(h)
-	}
-	return h
-}
-
 var c = cache.New(1*time.Minute, 5*time.Minute)
 
 func main() {
+	// load .env
+	if err := godotenv.Load(); err != nil {
+		panic(err)
+	}
+
 	// SENTRY
 	sentryDsn := os.Getenv("sentry_dsn")
 	if sentryDsn != "" {
 		if err := sentry.Init(sentry.ClientOptions{Dsn: sentryDsn}); err != nil {
 			log.Fatal(err)
 		}
-		sentryHandler = sentryhttp.New(sentryhttp.Options{})
 	}
+	sentryMiddleware := sentryhttp.New(sentryhttp.Options{})
 
 	// connect to MySQL db
 	db, err := dbConn(os.Getenv("db") + "/transfermeit?parseTime=true&loc=" + time.Local.String())
@@ -66,18 +65,25 @@ func main() {
 	}
 	c.Start()
 
-	// HANDLERS
-	mux := http.NewServeMux()
-	mux.Handle("/ws", customCallback(s.WSHandler))
-	mux.Handle("/code", customCallback(s.CreateCodeHandler))
-	mux.Handle("/init-upload", customCallback(s.InitUploadHandler))
-	mux.Handle("/upload", customCallback(s.UploadHandler))
-	mux.Handle("/download", customCallback(s.DownloadHandler))
-	mux.Handle("/completed-download", customCallback(s.CompletedDownloadHandler))
-	mux.Handle("/register", customCallback(s.RegisterCreditHandler))
-	mux.Handle("/toggle-perm-code", customCallback(s.TogglePermCodeHandler))
-	mux.Handle("/custom-code", customCallback(s.CustomCodeHandler))
+	r := chi.NewRouter()
 
-	mux.HandleFunc("/live", s.LiveHandler)
-	graceful.ListenAndServe(&http.Server{Addr: ":8080", Handler: mux})
+	// middleware
+	r.Use(tollbooth_chi.LimitHandler(lmt))
+	r.Use(sentryMiddleware.Handle)
+	mux := r
+	mux.Use(ServerKeyHandler)
+
+	// HANDLERS
+	mux.HandleFunc("/ws", s.WSHandler)
+	mux.HandleFunc("/code", s.CreateCodeHandler)
+	mux.HandleFunc("/init-upload", s.InitUploadHandler)
+	mux.HandleFunc("/upload", s.UploadHandler)
+	mux.HandleFunc("/download", s.DownloadHandler)
+	mux.HandleFunc("/completed-download", s.CompletedDownloadHandler)
+	mux.HandleFunc("/register", s.RegisterCreditHandler)
+	mux.HandleFunc("/toggle-perm-code", s.TogglePermCodeHandler)
+	mux.HandleFunc("/custom-code", s.CustomCodeHandler)
+
+	r.HandleFunc("/live", s.LiveHandler)
+	graceful.ListenAndServe(&http.Server{Addr: ":8080", Handler: r})
 }

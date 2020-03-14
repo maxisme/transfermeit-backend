@@ -113,7 +113,7 @@ func (transfer Transfer) Completed(db *sql.DB, failed bool, expired bool) {
 
 		// send user stats update to sender
 		fromUser := User{UUID: transfer.from.UUID}
-		fromUser.GetStats(db)
+		fromUser.SetStats(db)
 		go WSConns.Write(SocketMessage{
 			User: &fromUser,
 		}, transfer.from.UUID, true)

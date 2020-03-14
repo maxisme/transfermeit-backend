@@ -173,11 +173,11 @@ func (s *Server) CreateCodeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	wm, err := strconv.Atoi(r.Form.Get("wanted_mins")) // convert to int
+	wantedMins, err := strconv.Atoi(r.Form.Get("wanted_mins")) // convert to int
 	if err != nil {
-		wm = defaultAccountLifeMins
+		wantedMins = defaultAccountLifeMins
 	}
-	user.SetWantedMins(s.db, wm)
+	user.SetWantedMins(s.db, wantedMins)
 
 	user.Code = GenCode(s.db)
 	UUIDKey, userExists := user.GetUUIDKey(s.db)

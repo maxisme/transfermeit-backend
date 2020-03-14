@@ -25,10 +25,9 @@ jobs:
             ${{ runner.os }}-go-
 
       - name: Test
-        env:
-          session_key: "UH9ax500yN4mnTO60WLY2ae943tsqzFw"
-          db: "root:root@"
-        run: go test ./... -v -covermode=count -coverprofile=coverage.out
+        run: |
+          mv .env.test .env
+          go test ./... -v
   
       - uses: codecov/codecov-action@v1
         with:

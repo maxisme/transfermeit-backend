@@ -132,16 +132,16 @@ func TestUploadDownloadCycle(t *testing.T) {
 		t.Errorf("file at path: '%v' should have been deleted", fileStoreDirectory+filePath)
 	}
 
-	// fetch success notification
-	message = readSocketMessage(user1Ws)
-	if message.Message.Title != "Successful Transfer" {
-		t.Errorf("expected: %v got %v", "Successful Transfer", message.Message.Title)
-	}
-
 	// fetch updated user stats from socket
 	message = readSocketMessage(user1Ws)
 	if message.User.BandwidthLeft != freeBandwidthBytes-fileSize {
 		t.Errorf("expected %v got %v", freeBandwidthBytes-fileSize, message.User.BandwidthLeft)
+	}
+
+	// fetch success notification
+	message = readSocketMessage(user1Ws)
+	if message.Message.Title != "Successful Transfer" {
+		t.Errorf("expected: %v got %v", "Successful Transfer", message.Message.Title)
 	}
 }
 
@@ -372,4 +372,8 @@ func TestInvalidIsValidUsers(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestKeepAlive(t *testing.T) {
+	//TODO
 }

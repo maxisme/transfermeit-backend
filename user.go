@@ -67,7 +67,7 @@ func (user User) UpdateUUIDKey(db *sql.DB) {
 
 // GetTier fetches the user tier level
 func (user *User) GetTier(db *sql.DB) {
-	user.getCredit(db)
+	user.SetCredit(db)
 	user.Tier = freeUserTier
 	if user.Credit >= customCodeCreditAmt {
 		user.Tier = customCodeUserTier
@@ -92,8 +92,8 @@ func (user *User) GetMinsAllowed(db *sql.DB) {
 	}
 }
 
-// GetStats fetches all stored stats of a user
-func (user *User) GetStats(db *sql.DB) {
+// SetStats fetches all stored stats of a user
+func (user *User) SetStats(db *sql.DB) {
 	// get code time left
 	user.GetExpiry(db)
 	if user.Expiry.Sub(time.Now()) <= 0 {
@@ -108,7 +108,7 @@ func (user *User) GetStats(db *sql.DB) {
 }
 
 // SetWantedMins sets the WantedMins as long as the request is legitimate
-func (user User) SetWantedMins(db *sql.DB, wantedMins int) {
+func (user *User) SetWantedMins(db *sql.DB, wantedMins int) {
 	user.GetMinsAllowed(db)
 	if wantedMins <= 0 || wantedMins%5 != 0 || wantedMins > maxAccountLifeMins || wantedMins > user.MinsAllowed {
 		user.WantedMins = defaultAccountLifeMins
@@ -133,7 +133,7 @@ func (user User) GetUUIDKey(db *sql.DB) (string, bool) {
 	return key, false
 }
 
-func (user *User) getCredit(db *sql.DB) {
+func (user *User) SetCredit(db *sql.DB) {
 	if user.Credit > 0 {
 		// already set the users credit so don't bother trying again
 		return
@@ -148,7 +148,7 @@ func (user *User) getCredit(db *sql.DB) {
 
 // GetBandwidthLeft fetches the amount of bandwidth the user has left for today
 func (user *User) GetBandwidthLeft(db *sql.DB) {
-	user.getCredit(db)
+	user.SetCredit(db)
 	usedBandwidth := getUserUsedBandwidth(db, *user)
 	creditedBandwidth := CreditToBandwidth(user.Credit)
 	user.BandwidthLeft = creditedBandwidth - usedBandwidth
@@ -156,7 +156,7 @@ func (user *User) GetBandwidthLeft(db *sql.DB) {
 
 // GetMaxFileSize fetches the maximum file size a user can upload with
 func (user *User) GetMaxFileSize(db *sql.DB) {
-	user.getCredit(db)
+	user.SetCredit(db)
 	user.MaxFileSize = CreditToFileUploadSize(user.Credit)
 }
 
