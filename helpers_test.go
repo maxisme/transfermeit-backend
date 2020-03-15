@@ -39,7 +39,6 @@ func initDB(t *testing.M) {
 	// initialise db
 	db, err := dbConn(os.Getenv("db") + "/?multiStatements=True&loc=" + time.Local.String())
 	if err != nil {
-		fmt.Println(os.Getenv("db"))
 		panic(err.Error())
 	}
 	defer db.Close()
