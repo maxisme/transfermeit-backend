@@ -1,4 +1,4 @@
-package main
+package tmi
 
 import (
 	"database/sql"
@@ -24,6 +24,8 @@ const (
 	permCodeCreditAmt   = 5.0  // once user has this much credit they will have PermUserTier
 	customCodeCreditAmt = 10.0 // once user has this much credit they will have CustomCodeUserTier
 )
+
+var c = cache.New(1*time.Minute, 5*time.Minute)
 
 // User structure
 type User struct {

@@ -1,4 +1,4 @@
-package main
+package tmi
 
 import (
 	"encoding/json"
@@ -60,7 +60,7 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	UUIDHash := Hash(user.UUID)
 
-	if !user.IsValid(s.db) {
+	if !user.IsValid(s.DB) {
 		WriteError(w, r, 401, "Invalid credentials!")
 		return
 	}
@@ -81,7 +81,7 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	WSConns.AddConn(UUIDHash, &f)
 
 	// mark user as connected in db
-	go user.IsConnected(s.db, true)
+	go user.IsConnected(s.DB, true)
 
 	// write pending messages
 	PendingMessages.RLock()
@@ -109,9 +109,9 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 		var mess IncomingSocketMessage
 		Handle(json.Unmarshal(message, &mess))
 		if mess.Type == "keep-alive" {
-			go KeepAliveTransfer(s.db, user, mess.Content)
+			go KeepAliveTransfer(s.DB, user, mess.Content)
 		} else if mess.Type == "stats" {
-			user.SetStats(s.db)
+			user.SetStats(s.DB)
 			WSConns.Write(SocketMessage{
 				User: &user,
 			}, user.UUID, true)
@@ -120,7 +120,7 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// mark user as disconnected
-	go user.IsConnected(s.db, false)
+	go user.IsConnected(s.DB, false)
 
 	// remove client from clients
 	WSConns.RemConn(UUIDHash)

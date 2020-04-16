@@ -6,10 +6,11 @@ import (
 	"github.com/didip/tollbooth/limiter"
 	"github.com/didip/tollbooth_chi"
 	"github.com/getsentry/sentry-go"
-	sentryhttp "github.com/getsentry/sentry-go/http"
+	shttp "github.com/getsentry/sentry-go/http"
 	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/middleware"
 	"github.com/joho/godotenv"
-	"github.com/patrickmn/go-cache"
+	"github.com/maxisme/transfermeit-backend/tmi"
 	"github.com/robfig/cron"
 	"log"
 	"net/http"
@@ -24,14 +25,12 @@ var lmt = tollbooth.NewLimiter(2, &limiter.ExpirableOptions{DefaultExpirationTTL
 func ServerKeyHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Sec-Key") != os.Getenv("server_key") {
-			WriteError(w, r, 400, "Invalid form data")
+			tmi.WriteError(w, r, 400, "Invalid form data")
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
 }
-
-var c = cache.New(1*time.Minute, 5*time.Minute)
 
 func main() {
 	// load .env
@@ -43,19 +42,19 @@ func main() {
 	sentryDsn := os.Getenv("sentry_dsn")
 	if sentryDsn != "" {
 		if err := sentry.Init(sentry.ClientOptions{Dsn: sentryDsn}); err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 	}
-	sentryMiddleware := sentryhttp.New(sentryhttp.Options{})
+	sentryMiddleware := shttp.New(shttp.Options{})
 
 	// connect to MySQL db
-	db, err := dbConn(os.Getenv("db") + "/transfermeit?parseTime=true&loc=" + time.Local.String())
+	db, err := tmi.DbConn(os.Getenv("db") + "/transfermeit?parseTime=true&loc=" + time.Local.String())
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
 
-	s := Server{db: db}
+	s := tmi.Server{DB: db}
 
 	// clean up cron
 	c := cron.New()
@@ -68,8 +67,13 @@ func main() {
 	r := chi.NewRouter()
 
 	// middleware
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
 	r.Use(tollbooth_chi.LimitHandler(lmt))
 	r.Use(sentryMiddleware.Handle)
+
 	mux := r
 	mux.Use(ServerKeyHandler)
 
@@ -84,6 +88,7 @@ func main() {
 	mux.HandleFunc("/toggle-perm-code", s.TogglePermCodeHandler)
 	mux.HandleFunc("/custom-code", s.CustomCodeHandler)
 
-	r.HandleFunc("/live", s.LiveHandler)
+	r.HandleFunc("/live", s.LiveHandler) // handler not wrapped by ServerKeyHandler
+
 	graceful.ListenAndServe(&http.Server{Addr: ":8080", Handler: r})
 }

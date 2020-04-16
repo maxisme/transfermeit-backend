@@ -1,4 +1,4 @@
-package main
+package tmi
 
 import (
 	"fmt"
@@ -78,7 +78,7 @@ func TestBytesToMegabytes(t *testing.T) {
 
 func TestUpdateErr(t *testing.T) {
 	// invalid UUID so shouldn't update any rows
-	err := UpdateErr(s.db.Exec(`
+	err := UpdateErr(s.DB.Exec(`
 	UPDATE user 
 	SET UUID_key=''
 	WHERE UUID = ?
@@ -88,7 +88,7 @@ func TestUpdateErr(t *testing.T) {
 	}
 
 	// should fail because invalid SQL is passed
-	err = UpdateErr(s.db.Exec(`NOT valid SQL`))
+	err = UpdateErr(s.DB.Exec(`NOT valid SQL`))
 	if err == nil {
 		t.Errorf("Should have failed because of invalid SQL")
 	}

@@ -1,4 +1,4 @@
-package main
+package tmi
 
 import (
 	"database/sql"
@@ -142,7 +142,7 @@ func AllowedToDownload(db *sql.DB, user User, filePath string) bool {
 // server
 func (s *Server) CleanExpiredTransfers() {
 	// find and remove all expired uploads
-	rows, err := s.db.Query(`
+	rows, err := s.DB.Query(`
 	SELECT id, file_path, to_UUID, from_UUID
 	FROM transfer
 	WHERE finished_dttm IS NULL
@@ -156,7 +156,7 @@ func (s *Server) CleanExpiredTransfers() {
 		var transfer Transfer
 		err := rows.Scan(&transfer.ID, &transfer.FilePath, &transfer.to.UUID, &transfer.from.UUID)
 		Handle(err)
-		go transfer.Completed(s.db, true, true)
+		go transfer.Completed(s.DB, true, true)
 		cnt += 1
 	}
 	rows.Close()

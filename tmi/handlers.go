@@ -1,4 +1,4 @@
-package main
+package tmi
 
 import (
 	"encoding/gob"
@@ -41,23 +41,23 @@ func (s *Server) TogglePermCodeHandler(w http.ResponseWriter, r *http.Request) {
 		UUIDKey: r.Form.Get("UUID_key"),
 	}
 
-	if !user.IsValid(s.db) {
+	if !user.IsValid(s.DB) {
 		log.Println("Invalid credentials")
 		WriteError(w, r, 400, "Invalid form data")
 		return
 	}
 
-	user.GetTier(s.db)
+	user.GetTier(s.DB)
 	if user.Tier >= permUserTier {
-		permCode, customCode := GetUserPermCode(s.db, user)
+		permCode, customCode := GetUserPermCode(s.DB, user)
 		if permCode.Valid || customCode.Valid {
 			// remove any stored codes (INCLUDING custom code) as they already have one or the other
-			err := RemovePermCodes(s.db, user)
+			err := RemovePermCodes(s.DB, user)
 			Handle(err)
 		} else {
 			// turn on random perm code
-			user.Code = GenCode(s.db)
-			if err := SetPermCode(s.db, user); err != nil {
+			user.Code = GenCode(s.DB)
+			if err := SetPermCode(s.DB, user); err != nil {
 				WriteError(w, r, 401, "Failed to set permanent code")
 				return
 			}
@@ -85,7 +85,7 @@ func (s *Server) CustomCodeHandler(w http.ResponseWriter, r *http.Request) {
 		UUIDKey: r.Form.Get("UUID_key"),
 	}
 
-	if !user.IsValid(s.db) {
+	if !user.IsValid(s.DB) {
 		WriteError(w, r, 400, "Invalid form data")
 		return
 	}
@@ -96,9 +96,9 @@ func (s *Server) CustomCodeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user.GetTier(s.db)
+	user.GetTier(s.DB)
 	if user.Tier >= customCodeUserTier {
-		err := SetCustomCode(s.db, user)
+		err := SetCustomCode(s.DB, user)
 		if err == nil {
 			Handle(WriteJSON(w, user))
 			return
@@ -126,14 +126,14 @@ func (s *Server) RegisterCreditHandler(w http.ResponseWriter, r *http.Request) {
 		UUIDKey: r.Form.Get("UUID_key"),
 	}
 
-	if !user.IsValid(s.db) {
+	if !user.IsValid(s.DB) {
 		WriteError(w, r, 400, "Invalid form data")
 		return
 	}
 
 	creditCode := r.Form.Get("credit_code")
 	if len(creditCode) == CreditCodeLen {
-		if err := SetCreditCode(s.db, user, creditCode); err != nil {
+		if err := SetCreditCode(s.DB, user, creditCode); err != nil {
 			WriteError(w, r, 401, "Failed to register credit")
 			return
 		}
@@ -169,7 +169,7 @@ func (s *Server) CreateCodeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !IsValidPublicKey(user.PublicKey) {
-		WriteError(w, r, 401, "Invalid public key in keychain!")
+		WriteError(w, r, 401, "Invalid public key")
 		return
 	}
 
@@ -177,13 +177,13 @@ func (s *Server) CreateCodeHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		wantedMins = defaultAccountLifeMins
 	}
-	user.SetWantedMins(s.db, wantedMins)
+	user.SetWantedMins(s.DB, wantedMins)
 
-	user.Code = GenCode(s.db)
-	UUIDKey, userExists := user.GetUUIDKey(s.db)
+	user.Code = GenCode(s.DB)
+	UUIDKey, userExists := user.GetUUIDKey(s.DB)
 
-	if userExists && len(UUIDKey) > 0 && !user.IsValid(s.db) {
-		WriteError(w, r, 402, "Invalid UUID key. Ask hello@transferme.it to reset")
+	if userExists && len(UUIDKey) > 0 && !user.IsValid(s.DB) {
+		WriteError(w, r, 402, "Invalid UUID key. Please ask hello@transferme.it to reset.")
 		return
 	} else if !userExists {
 		// create new tmi user
@@ -194,14 +194,14 @@ func (s *Server) CreateCodeHandler(w http.ResponseWriter, r *http.Request) {
 		user.MinsAllowed = defaultAccountLifeMins
 		user.WantedMins = defaultAccountLifeMins
 		user.Expiry = time.Now().Add(time.Minute * time.Duration(defaultAccountLifeMins)).UTC()
-		go user.Store(s.db)
+		go user.Store(s.DB)
 	} else {
 		if len(UUIDKey) == 0 {
 			// if key has been removed from db because of lost UUID key from client
 			log.Println("Resetting UUID key for " + user.UUID)
 
 			user.UUIDKey = RandomString(keyUUIDLen)
-			go user.UpdateUUIDKey(s.db)
+			go user.UpdateUUIDKey(s.DB)
 		} else {
 			user.UUIDKey = ""
 		}
@@ -209,11 +209,11 @@ func (s *Server) CreateCodeHandler(w http.ResponseWriter, r *http.Request) {
 		// set perm code at client request
 		expectedPermCode := r.Form.Get("perm_user_code")
 		if len(expectedPermCode) != 0 {
-			SetUsersPermCode(s.db, &user, expectedPermCode)
+			SetUsersPermCode(s.DB, &user, expectedPermCode)
 		}
 
 		user.Expiry = time.Now().Add(time.Minute * time.Duration(user.WantedMins)).UTC()
-		go user.Update(s.db)
+		go user.Update(s.DB)
 	}
 
 	Handle(WriteJSON(w, user))
@@ -238,7 +238,7 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 		UUIDKey: r.Form.Get("UUID_key"),
 	}
 
-	if !user.IsValid(s.db) {
+	if !user.IsValid(s.DB) {
 		WriteError(w, r, 400, "Invalid method")
 		return
 	}
@@ -250,7 +250,7 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	code := r.Form.Get("code")
-	friend := CodeToUser(s.db, code)
+	friend := CodeToUser(s.DB, code)
 	if friend.UUID == "" || friend.PublicKey == "" {
 		WriteError(w, r, 402, "Your friend does not exist!")
 		return
@@ -261,15 +261,15 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user.GetWantedMins(s.db)
+	user.GetWantedMins(s.DB)
 
-	user.GetBandwidthLeft(s.db)
+	user.GetBandwidthLeft(s.DB)
 	if user.BandwidthLeft-filesize < 0 {
 		WriteError(w, r, 404, "This transfer exceeds today's bandwidth limit!")
 		return
 	}
 
-	user.GetMaxFileSize(s.db)
+	user.GetMaxFileSize(s.DB)
 	if user.MaxFileSize-filesize < 0 {
 		log.Printf("transfer with %v difference", BytesToMegabytes(user.MaxFileSize-filesize))
 		mb := BytesToMegabytes(user.MaxFileSize)
@@ -284,12 +284,12 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 		Size: filesize,
 	}
 
-	if transfer.AlreadyToUser(s.db) {
+	if transfer.AlreadyToUser(s.DB) {
 		// already uploading to friend so delete the currently in process transfer
-		go transfer.Completed(s.db, true, false)
+		go transfer.Completed(s.DB, true, false)
 	}
 
-	transfer.ID = transfer.InitialStore(s.db)
+	transfer.ID = transfer.InitialStore(s.DB)
 	transfer.from.UUID = "" // for privacy remove the UUID
 
 	// store transfer information in session to be picked up by UploadHandler
@@ -328,9 +328,8 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	// get POST data
 	if err := r.ParseForm(); err != nil {
-		Handle(err)
 		WriteError(w, r, 400, "Invalid form data")
-		return
+
 	}
 
 	// get (encrypted with friends public key) password
@@ -368,7 +367,7 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	transfer.hash = HashWithBytes(fileBytes)
 	transfer.Size = int(handler.Size)
 
-	Handle(transfer.Store(s.db))
+	Handle(transfer.Store(s.DB))
 
 	// tell friend to download file
 	WSConns.Write(SocketMessage{
@@ -396,13 +395,13 @@ func (s *Server) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 		UUIDKey: r.Form.Get("UUID_key"),
 	}
 
-	if !user.IsValid(s.db) {
+	if !user.IsValid(s.DB) {
 		WriteError(w, r, 400, "Invalid form data")
 		return
 	}
 
 	filePath := r.Form.Get("file_path")
-	if !AllowedToDownload(s.db, user, filePath) {
+	if !AllowedToDownload(s.DB, user, filePath) {
 		WriteError(w, r, 401, "No such file at path!")
 		return
 	}
@@ -447,7 +446,7 @@ func (s *Server) CompletedDownloadHandler(w http.ResponseWriter, r *http.Request
 		UUIDKey: r.Form.Get("UUID_key"),
 	}
 
-	if !user.IsValid(s.db) {
+	if !user.IsValid(s.DB) {
 		WriteError(w, r, 400, "Invalid form data")
 		return
 	}
@@ -461,7 +460,7 @@ func (s *Server) CompletedDownloadHandler(w http.ResponseWriter, r *http.Request
 	failed := true
 	if transfer.hash != "" {
 		failed = false
-		transfer.GetPasswordAndUUID(s.db)
+		transfer.GetPasswordAndUUID(s.DB)
 		if transfer.password == "" || transfer.from.UUID == "" {
 			log.Println("No password for user. Or already uploading to user", transfer)
 			WriteError(w, r, 402, "No password for user")
@@ -470,5 +469,5 @@ func (s *Server) CompletedDownloadHandler(w http.ResponseWriter, r *http.Request
 		Handle(err)
 	}
 
-	transfer.Completed(s.db, failed, false)
+	transfer.Completed(s.DB, failed, false)
 }

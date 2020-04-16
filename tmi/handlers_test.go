@@ -1,4 +1,4 @@
-package main
+package tmi
 
 import (
 	"encoding/json"
@@ -283,7 +283,7 @@ func TestUUIDReset(t *testing.T) {
 }
 
 func TestCustomCode(t *testing.T) {
-	var customCode = GenCode(s.db)
+	var customCode = GenCode(s.DB)
 	var user User
 
 	_, form := genCreditUser(customCodeCreditAmt)

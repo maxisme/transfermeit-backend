@@ -1,4 +1,4 @@
-package main
+package tmi
 
 import (
 	"database/sql"
@@ -72,8 +72,8 @@ func (s *Server) LiveHandler(w http.ResponseWriter, r *http.Request) {
 	tmplPath := "web/templates/live.html"
 	tmpl := template.Must(template.ParseFiles(tmplPath))
 	data := liveContent{
-		Users:   getAllDisplayUsers(s.db),
-		Uploads: getAllDisplayTransfers(s.db),
+		Users:   getAllDisplayUsers(s.DB),
+		Uploads: getAllDisplayTransfers(s.DB),
 	}
 	err := tmpl.Execute(w, data)
 	Handle(err)

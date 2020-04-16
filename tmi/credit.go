@@ -1,4 +1,4 @@
-package main
+package tmi
 
 import (
 	"database/sql"

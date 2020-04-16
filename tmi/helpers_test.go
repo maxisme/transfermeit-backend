@@ -1,7 +1,7 @@
 /*
 helpers for *_test.go code
 */
-package main
+package tmi
 
 import (
 	"bytes"
@@ -37,7 +37,7 @@ func initDB(t *testing.M) {
 	TESTDBNAME := "transfermeit_test"
 
 	// initialise db
-	db, err := dbConn(os.Getenv("db") + "/?multiStatements=True&loc=" + time.Local.String())
+	db, err := DbConn(os.Getenv("db") + "/?multiStatements=True&loc=" + time.Local.String())
 	if err != nil {
 		panic(err.Error())
 	}
@@ -68,8 +68,8 @@ func initDB(t *testing.M) {
 		panic(err)
 	}
 
-	db, err = dbConn(dbConnStr + "?parseTime=true&loc=" + time.Local.String())
-	s = Server{db: db}
+	db, err = DbConn(dbConnStr + "?parseTime=true&loc=" + time.Local.String())
+	s = Server{DB: db}
 
 	code := t.Run() // RUN THE TEST
 
@@ -139,7 +139,7 @@ func connectWSSHeader(wsheader http.Header) (*httptest.Server, *http.Response, *
 }
 
 func generateProCredit(activationCode string, credit float64) {
-	_, err := s.db.Exec(`
+	_, err := s.DB.Exec(`
 	INSERT INTO credit (activation_dttm, activation_code, credit, email)
 	VALUES (NOW(), ?, ?, ?)
 	`, activationCode, credit, randomdata.Email())
@@ -147,7 +147,7 @@ func generateProCredit(activationCode string, credit float64) {
 }
 
 func removeUUIDKey(form url.Values) {
-	Handle(UpdateErr(s.db.Exec(`
+	Handle(UpdateErr(s.DB.Exec(`
 	UPDATE user 
 	SET UUID_key=''
 	WHERE UUID = ?

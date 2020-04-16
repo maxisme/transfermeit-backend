@@ -1,4 +1,4 @@
-package main
+package tmi
 
 import (
 	"database/sql"
@@ -7,10 +7,10 @@ import (
 
 // Server is used for database pooling - sharing the db connection to the web handlers.
 type Server struct {
-	db *sql.DB
+	DB *sql.DB
 }
 
-func dbConn(dataSourceName string) (db *sql.DB, err error) {
+func DbConn(dataSourceName string) (db *sql.DB, err error) {
 	db, err = sql.Open("mysql", dataSourceName)
 	if err != nil {
 		return
