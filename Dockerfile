@@ -1,11 +1,11 @@
-FROM golang:1.13-alpine
+FROM golang:1.14 as builder
 
-RUN apk update
-RUN apk add git
-RUN apk add gcc
-RUN apk add libc-dev
+WORKDIR /
+ADD . .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-extldflags "-static"' -o /transfermeit .
 
-ADD . /app/
-WORKDIR /app
-RUN go build -o transfermeit .
-CMD ["/app/transfermeit"]
+FROM scratch
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /transfermeit /transfermeit
+WORKDIR /
+ENTRYPOINT ["/transfermeit"]
