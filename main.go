@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/TV4/graceful"
 	"github.com/didip/tollbooth"
 	"github.com/didip/tollbooth/limiter"
@@ -17,6 +18,7 @@ import (
 	"github.com/patrickmn/go-cache"
 	"github.com/robfig/cron"
 	log "github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/api/trace"
 
 	"net/http"
 	"os"
@@ -117,6 +119,12 @@ func main() {
 	r.Use(tracer.Middleware)
 	r.HandleFunc("/health", func(writer http.ResponseWriter, request *http.Request) {})
 	r.HandleFunc("/live", s.LiveHandler)
+	r.HandleFunc("/trace", func(w http.ResponseWriter, r *http.Request) {
+		span := trace.SpanFromContext(r.Context())
+		span.SetName("wahoo baby 3")
+		_, _ = w.Write([]byte(fmt.Sprintf("%v", r.Header)))
+		span.End()
+	})
 
 	r.Group(func(mux chi.Router) {
 		mux.Use(ServerKeyMiddleware)

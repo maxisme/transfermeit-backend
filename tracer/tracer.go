@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/trace/jaeger"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"log"
+	"net"
 	"net/http"
 	"os"
 )
@@ -18,8 +19,6 @@ func Middleware(next http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := propagation.ExtractHTTP(r.Context(), props, r.Header)
-		spanCtx := trace.RemoteSpanContextFromContext(ctx)
-		ctx = trace.ContextWithRemoteSpanContext(ctx, spanCtx)
 		tr := global.Tracer("")
 		_, span := tr.Start(ctx, fmt.Sprintf("%s request", r.Method))
 		next.ServeHTTP(w, r)
@@ -28,14 +27,11 @@ func Middleware(next http.Handler) http.Handler {
 }
 
 func Init(serviceName, colectorHostname string) func() {
-	// Create and install Jaeger export pipeline
 	flush, err := jaeger.InstallNewPipeline(
 		jaeger.WithCollectorEndpoint(fmt.Sprintf("http://%s/api/traces?format=zipkin.thrift", colectorHostname)),
 		jaeger.WithProcess(jaeger.Process{
 			ServiceName: serviceName,
-			Tags: []kv.KeyValue{
-				kv.String("commit-hash", os.Getenv("COMMIT_HASH")),
-			},
+			Tags:        getTags(),
 		}),
 		jaeger.WithSDK(&sdktrace.Config{DefaultSampler: sdktrace.AlwaysSample()}),
 	)
@@ -46,4 +42,18 @@ func Init(serviceName, colectorHostname string) func() {
 	return func() {
 		flush()
 	}
+}
+
+func getTags() []kv.KeyValue {
+	tags := []kv.KeyValue{
+		kv.String("commit-hash", os.Getenv("COMMIT_HASH")),
+	}
+	host, _ := os.Hostname()
+	ips, _ := net.LookupIP(host)
+	for id, addr := range ips {
+		if ipv4 := addr.To4(); ipv4 != nil {
+			tags = append(tags, kv.String(fmt.Sprintf("hostname-ip-%d", id), string(ipv4)))
+		}
+	}
+	return tags
 }
