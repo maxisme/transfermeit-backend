@@ -5,6 +5,10 @@ RUN go build -o app
 
 
 FROM alpine
+
+ARG COMMIT_HASH
+ENV COMMIT_HASH=$COMMIT_HASH
+
 WORKDIR /app
 COPY --from=builder /app/app /app/app
 RUN apk add curl

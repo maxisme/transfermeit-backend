@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 )
 
 func Middleware(next http.Handler) http.Handler {
@@ -22,6 +23,7 @@ func Middleware(next http.Handler) http.Handler {
 		ctx = trace.ContextWithRemoteSpanContext(ctx, spanCtx)
 		tr := global.Tracer("")
 		_, span := tr.Start(ctx, fmt.Sprintf("%s request", r.Method))
+		time.Sleep(time.Second * 1)
 		next.ServeHTTP(w, r)
 		span.End()
 	})
