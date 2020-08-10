@@ -39,7 +39,7 @@ services:
     build:
       context: .
     environment:
-      DB_HOST: root:root@tcp(db:3306)/transfermeit
+      DB_HOST: transfermeit:transfermeit@tcp(db:3306)/transfermeit
       SERVER_KEY: QVcnKozlSUvRSPj0jqjya7vZJLrkKUvKIq0WkpKN
       SESSION_KEY: rps2P8irs0mT5uCgicv8m5PMq9a6WyzbxL7HWeRK
       REDIS_HOST: "redis:6379"
