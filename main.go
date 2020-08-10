@@ -1,30 +1,42 @@
 package main
 
 import (
+	"database/sql"
 	"github.com/TV4/graceful"
 	"github.com/didip/tollbooth"
 	"github.com/didip/tollbooth/limiter"
-	"github.com/didip/tollbooth_chi"
 	"github.com/getsentry/sentry-go"
 	sentryhttp "github.com/getsentry/sentry-go/http"
 	"github.com/go-chi/chi"
+	"github.com/go-redis/redis/v7"
 	"github.com/joho/godotenv"
+	"github.com/maxisme/notifi-backend/conn"
+	"github.com/maxisme/notifi-backend/ws"
+	"github.com/minio/minio-go/v7"
 	"github.com/patrickmn/go-cache"
 	"github.com/robfig/cron"
-	"log"
+	log "github.com/sirupsen/logrus"
+
 	"net/http"
 	"os"
 	"time"
 )
 
-var lmt = tollbooth.NewLimiter(2, &limiter.ExpirableOptions{DefaultExpirationTTL: time.Hour}).SetIPLookups([]string{
-	"RemoteAddr", "X-Forwarded-For", "X-Real-IP",
-})
+func init() {
+	log.SetFormatter(&log.JSONFormatter{})
+	log.SetOutput(os.Stdout)
+	log.SetLevel(log.TraceLevel)
+}
 
-func ServerKeyHandler(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Sec-Key") != os.Getenv("server_key") {
-			WriteError(w, r, 400, "Invalid form data")
+// ServerKeyMiddleware middleware makes sure the Sec-Key header matches the SERVER_KEY environment variable as
+// well as rate limiting requests
+func ServerKeyMiddleware(next http.Handler) http.Handler {
+	return tollbooth.LimitFuncHandler(tollbooth.NewLimiter(
+		2,
+		&limiter.ExpirableOptions{DefaultExpirationTTL: time.Hour},
+	).SetIPLookups([]string{"RemoteAddr", "X-Forwarded-For", "X-Real-IP"}), func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Sec-Key") != os.Getenv("SERVER_KEY") {
+			WriteError(w, r, http.StatusForbidden, "Invalid server key")
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -33,6 +45,14 @@ func ServerKeyHandler(next http.Handler) http.Handler {
 
 var c = cache.New(1*time.Minute, 5*time.Minute)
 
+// Server is used for database pooling - sharing the db connection to the web handlers.
+type Server struct {
+	db      *sql.DB
+	minio   *minio.Client
+	redis   *redis.Client
+	funnels *ws.Funnels
+}
+
 func main() {
 	// load .env
 	if err := godotenv.Load(); err != nil {
@@ -40,7 +60,7 @@ func main() {
 	}
 
 	// SENTRY
-	sentryDsn := os.Getenv("sentry_dsn")
+	sentryDsn := os.Getenv("SENTRY_DSN")
 	if sentryDsn != "" {
 		if err := sentry.Init(sentry.ClientOptions{Dsn: sentryDsn}); err != nil {
 			log.Fatal(err)
@@ -48,18 +68,40 @@ func main() {
 	}
 	sentryMiddleware := sentryhttp.New(sentryhttp.Options{})
 
-	// connect to MySQL db
-	db, err := dbConn(os.Getenv("db") + "/transfermeit?parseTime=true&loc=" + time.Local.String())
+	// connect to db
+	dbConn, err := conn.DbConn(os.Getenv("DB_HOST") + "/transfermeit?parseTime=true&loc=" + time.Local.String())
+	if err != nil {
+		panic(err)
+	}
+	defer dbConn.Close()
+
+	// connect to redis
+	redisConn, err := conn.RedisConn(os.Getenv("REDIS_HOST"))
+	if err != nil {
+		panic(err)
+	}
+	defer redisConn.Close()
+
+	// connect to minio
+	minioClient, err := getMinioClient(os.Getenv("MINIO_ENDPOINT"), bucketName, os.Getenv("MINIO_ACCESS_KEY"), os.Getenv("MINIO_SECRET_KEY"))
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
 
-	s := Server{db: db}
+	s := Server{
+		db:      dbConn,
+		minio:   minioClient,
+		redis:   redisConn,
+		funnels: &ws.Funnels{Clients: make(map[string]*ws.Funnel), StoreOnFailure: true},
+	}
 
 	// clean up cron
 	c := cron.New()
-	err = c.AddFunc("@every 1m", s.CleanExpiredTransfers)
+	err = c.AddFunc("@every 1m", func() {
+		if err := s.CleanExpiredTransfers(); err != nil {
+			log.Error(err)
+		}
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -68,10 +110,11 @@ func main() {
 	r := chi.NewRouter()
 
 	// middleware
-	r.Use(tollbooth_chi.LimitHandler(lmt))
 	r.Use(sentryMiddleware.Handle)
+	r.HandleFunc("/health", func(writer http.ResponseWriter, request *http.Request) {})
+
 	mux := r
-	mux.Use(ServerKeyHandler)
+	mux.Use(ServerKeyMiddleware)
 
 	// HANDLERS
 	mux.HandleFunc("/ws", s.WSHandler)

@@ -5,7 +5,8 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/patrickmn/go-cache"
 	"html/template"
-	"log"
+
+	log "github.com/sirupsen/logrus"
 	"net/http"
 	"time"
 )
@@ -32,27 +33,33 @@ type liveContent struct {
 	Users   []displayUser
 }
 
-func getAllDisplayTransfers(db *sql.DB) []displayTransfer {
+func getAllDisplayTransfers(db *sql.DB) ([]displayTransfer, error) {
 	var transfers []displayTransfer
 	if u, found := c.Get("transfers"); found {
 		transfers = u.([]displayTransfer)
 	} else {
-		log.Println("Refreshed transfer cache")
+		log.Info("Refreshed transfer cache")
 		// fetch transfers from db if not in cache
 		rows, err := db.Query(`
 		SELECT from_UUID, to_UUID, expiry_dttm, size, file_hash, failed, updated_dttm, finished_dttm
 		FROM transfer`)
+		if err != nil {
+			return nil, err
+		}
+
 		defer rows.Close()
-		Handle(err)
 		for rows.Next() {
 			var (
 				dt       displayTransfer
-				fileSize int
+				fileSize int64
 				updated  mysql.NullTime
 				finished mysql.NullTime
 			)
 			err = rows.Scan(&dt.FromUUID, &dt.ToUUID, &dt.FileExpiry, &fileSize, &dt.FileHash, &dt.Failed, &updated, &finished)
-			Handle(err)
+			if err != nil {
+				return nil, err
+			}
+
 			dt.Downloading = updated.Valid
 			dt.Finished = finished.Valid
 			dt.FileSize = BytesToReadable(fileSize)
@@ -60,21 +67,38 @@ func getAllDisplayTransfers(db *sql.DB) []displayTransfer {
 		}
 		c.Set("transfers", transfers, cache.DefaultExpiration)
 	}
-	return transfers
+	return transfers, nil
 }
 
 // LiveHandler returns a page displaying all historic transfers
 func (s *Server) LiveHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
-		WriteError(w, r, 400, "Invalid method")
+		WriteError(w, r, http.StatusBadRequest, "Invalid method")
 		return
 	}
 	tmplPath := "web/templates/live.html"
 	tmpl := template.Must(template.ParseFiles(tmplPath))
-	data := liveContent{
-		Users:   getAllDisplayUsers(s.db),
-		Uploads: getAllDisplayTransfers(s.db),
+
+	// get users
+	users, err := getAllDisplayUsers(s.db)
+	if err != nil {
+		WriteError(w, r, http.StatusBadRequest, err.Error())
+		return
 	}
-	err := tmpl.Execute(w, data)
-	Handle(err)
+
+	// get uploads
+	uploads, err := getAllDisplayTransfers(s.db)
+	if err != nil {
+		WriteError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	data := liveContent{
+		Users:   users,
+		Uploads: uploads,
+	}
+	if err := tmpl.Execute(w, data); err != nil {
+		WriteError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
 }

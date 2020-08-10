@@ -4,15 +4,18 @@ helpers for *_test.go code
 package main
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
 	"github.com/Pallinder/go-randomdata"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/mysql"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/maxisme/notifi-backend/conn"
+	"github.com/maxisme/notifi-backend/ws"
+
+	"bytes"
+	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -37,7 +40,7 @@ func initDB(t *testing.M) {
 	TESTDBNAME := "transfermeit_test"
 
 	// initialise db
-	db, err := dbConn(os.Getenv("db") + "/?multiStatements=True&loc=" + time.Local.String())
+	db, err := conn.DbConn("root:root@tcp(127.0.0.1:3306)/?multiStatements=True&loc=" + time.Local.String())
 	if err != nil {
 		panic(err.Error())
 	}
@@ -51,7 +54,7 @@ func initDB(t *testing.M) {
 	db.Close()
 
 	// apply patches
-	dbConnStr := os.Getenv("db") + "/" + TESTDBNAME
+	dbConnStr := "root:root@tcp(127.0.0.1:3306)/" + TESTDBNAME
 	m, err := migrate.New("file://sql/", "mysql://"+dbConnStr)
 	if err != nil {
 		panic(err)
@@ -68,8 +71,20 @@ func initDB(t *testing.M) {
 		panic(err)
 	}
 
-	db, err = dbConn(dbConnStr + "?parseTime=true&loc=" + time.Local.String())
-	s = Server{db: db}
+	db, err = conn.DbConn(dbConnStr + "?parseTime=true&loc=" + time.Local.String())
+	if err != nil {
+		panic(err)
+	}
+	minio, err := getMinioClient("127.0.0.1:9000", bucketName, "FfizvUST5eqWY0jhAulGKcIdLOz09VyvfE5", "lhFC48WhyPqVPiQJvthIbdj22KnturqaayT")
+	if err != nil {
+		panic(err)
+	}
+	redis, err := conn.RedisConn("127.0.0.1:6379")
+	if err != nil {
+		panic(err)
+	}
+
+	s = Server{db: db, minio: minio, redis: redis, funnels: &ws.Funnels{StoreOnFailure: true, Clients: make(map[string]*ws.Funnel)}}
 
 	code := t.Run() // RUN THE TEST
 
@@ -120,7 +135,7 @@ func connectWSS(user User, form url.Values) (*httptest.Server, *http.Response, *
 func readSocketMessage(ws *websocket.Conn) (message SocketMessage) {
 	_, mess, err := ws.ReadMessage()
 	if err != nil {
-		Handle(err)
+		fmt.Printf("%v\n", err)
 		return
 	}
 	_ = json.Unmarshal(mess, &message)
@@ -130,7 +145,6 @@ func readSocketMessage(ws *websocket.Conn) (message SocketMessage) {
 func connectWSSHeader(wsheader http.Header) (*httptest.Server, *http.Response, *websocket.Conn, error) {
 	server := httptest.NewServer(http.HandlerFunc(s.WSHandler))
 	ws, res, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http"), wsheader)
-	Handle(err)
 	if err == nil {
 		// add ws read timeout
 		_ = ws.SetReadDeadline(time.Now().Add(5000 * time.Millisecond))
@@ -139,22 +153,21 @@ func connectWSSHeader(wsheader http.Header) (*httptest.Server, *http.Response, *
 }
 
 func generateProCredit(activationCode string, credit float64) {
-	_, err := s.db.Exec(`
+	_, _ = s.db.Exec(`
 	INSERT INTO credit (activation_dttm, activation_code, credit, email)
 	VALUES (NOW(), ?, ?, ?)
 	`, activationCode, credit, randomdata.Email())
-	Handle(err)
 }
 
 func removeUUIDKey(form url.Values) {
-	Handle(UpdateErr(s.db.Exec(`
+	UpdateErr(s.db.Exec(`
 	UPDATE user 
 	SET UUID_key=''
 	WHERE UUID = ?
-	`, Hash(form.Get("UUID")))))
+	`, Hash(form.Get("UUID"))))
 }
 
-func upload(t *testing.T, user1 User, user2 User, form1 url.Values, fileSize int) string {
+func upload(t *testing.T, user1 User, user2 User, form1 url.Values, fileSize int64) string {
 
 	////////////
 	// UPLOAD //
@@ -164,7 +177,7 @@ func upload(t *testing.T, user1 User, user2 User, form1 url.Values, fileSize int
 	f, _ := os.Create("foo.bar")
 	defer f.Close()
 	defer os.Remove("foo.bar")
-	_ = f.Truncate(int64(fileSize))
+	_ = f.Truncate(fileSize)
 
 	// initial upload handler
 	initUploadR := initUpload(form1, user1, user2, fileSize)
@@ -184,11 +197,11 @@ func upload(t *testing.T, user1 User, user2 User, form1 url.Values, fileSize int
 	return password
 }
 
-func initUpload(form1 url.Values, user1 User, user2 User, fileSize int) *httptest.ResponseRecorder {
+func initUpload(form1 url.Values, user1 User, user2 User, fileSize int64) *httptest.ResponseRecorder {
 	form1.Set("UUID_key", user1.UUIDKey)
 	form1.Set("code", user2.Code)
-	form1.Set("filesize", strconv.Itoa(fileSize))
-	return postRequest(form1, http.HandlerFunc(s.InitUploadHandler))
+	form1.Set("filesize", strconv.FormatInt(fileSize, 10))
+	return postRequest(form1, s.InitUploadHandler)
 }
 
 func uploadFile(f *os.File, initCookie string, pass string) *httptest.ResponseRecorder {

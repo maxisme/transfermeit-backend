@@ -1,15 +1,18 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/maxisme/notifi-backend/ws"
+	"github.com/minio/minio-go/v7"
+	"log"
 	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
-	"path"
 	"strconv"
 	"strings"
 	"testing"
@@ -37,16 +40,16 @@ func TestCredentialHandler(t *testing.T) {
 
 	// create account with no public key
 	form.Set("UUID", UUID.String())
-	rr = postRequest(form, http.HandlerFunc(s.CreateCodeHandler))
-	if rr.Code != 401 {
-		t.Errorf("Got %v (%v) expected %v", rr.Code, rr.Body, 401)
+	rr = postRequest(form, s.CreateCodeHandler)
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("Got %v (%v) expected %v", rr.Code, rr.Body, http.StatusBadRequest)
 	}
 
 	// create account with invalid public key
 	form.Set("public_key", "not a key")
-	rr = postRequest(form, http.HandlerFunc(s.CreateCodeHandler))
-	if rr.Code != 401 {
-		t.Errorf("Got %v (%v) expected %v", rr.Code, rr.Body, 401)
+	rr = postRequest(form, s.CreateCodeHandler)
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("Got %v (%v) expected %v", rr.Code, rr.Body, http.StatusBadRequest)
 	}
 
 	// create account with valid public key
@@ -95,6 +98,19 @@ func TestUploadDownloadCycle(t *testing.T) {
 	user1, form1 := genUser()
 	user2, form2 := genUser()
 	_, _, user1Ws, _ := connectWSS(user1, form1)
+	funnel := &ws.Funnel{
+		Key:    user1.UUID,
+		WSConn: user1Ws,
+		PubSub: s.redis.Subscribe(user1.UUID),
+	}
+	s.funnels.Add(s.redis, funnel)
+	_, _, user2Ws, _ := connectWSS(user2, form2)
+	funnel2 := &ws.Funnel{
+		Key:    user2.UUID,
+		WSConn: user2Ws,
+		PubSub: s.redis.Subscribe(user2.UUID),
+	}
+	s.funnels.Add(s.redis, funnel2)
 
 	// UPLOAD
 	fileSize := MegabytesToBytes(10)
@@ -103,33 +119,31 @@ func TestUploadDownloadCycle(t *testing.T) {
 	// DOWNLOAD
 
 	// fetch initial message containing download file path that was sent when user was not connected to web socket
-	_, _, user2Ws, _ := connectWSS(user2, form2)
-	message := readSocketMessage(user2Ws)
-	filePath := message.Download.FilePath
-	if len(path.Dir(filePath)) != userDirLen {
-		t.Fatalf(filePath)
-	}
+
+	message := readSocketMessage(funnel2.WSConn)
+	log.Printf("%v\n", message)
+	objectName := message.Download.ObjectName
 	user2Ws.Close()
 
 	// download file at path
 	form2.Set("UUID_key", user2.UUIDKey)
-	form2.Set("file_path", filePath)
-	rr := postRequest(form2, http.HandlerFunc(s.DownloadHandler))
-	if rr.Code != 200 || len(rr.Body.Bytes()) != fileSize {
+	form2.Set("object_name", objectName)
+	rr := postRequest(form2, s.DownloadHandler)
+	if rr.Code != 200 || int64(len(rr.Body.Bytes())) != fileSize {
 		t.Errorf("Got %v expected %v", len(rr.Body.Bytes()), fileSize)
 	}
 
 	// run complete handler to receive password
-	form2.Set("file_path", filePath)
-	form2.Set("hash", HashWithBytes(rr.Body.Bytes()))
-	rr2 := postRequest(form2, http.HandlerFunc(s.CompletedDownloadHandler))
+	form2.Set("object_name", objectName)
+	rr2 := postRequest(form2, s.CompletedDownloadHandler)
 	if rr2.Body.String() != password {
 		t.Errorf("Got %v expected %v", rr2.Body.String(), password)
 	}
 
-	// verify file was deleted from server
-	if _, err := os.Stat(fileStoreDirectory + filePath); err == nil {
-		t.Errorf("file at path: '%v' should have been deleted", fileStoreDirectory+filePath)
+	// verify file was deleted
+	_, err := s.minio.GetObject(context.Background(), bucketName, objectName, minio.GetObjectOptions{})
+	if err == nil {
+		t.Errorf("object at path: '%v' should have been deleted", objectName)
 	}
 
 	// fetch updated user stats from socket

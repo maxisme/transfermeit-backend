@@ -34,7 +34,7 @@ jobs:
 
       - name: Test
         env:
-          session_key: "UH9ax500yN4mnTO60WLY2ae943tsqzFw"
+          SESSION_KEY: "UH9ax500yN4mnTO60WLY2ae943tsqzFw"
           db: "root:root@"
         run: go test ./... -v
   
@@ -42,17 +42,28 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
-  deploy:
-    name: Deploy
-    if: github.ref == 'refs/heads/master'
+  publish:
+    name: Publish Docker image
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy
-        uses: appleboy/ssh-action@master
+      - uses: actions/checkout@master
         with:
-          host: ${{ secrets.HOST }}
-          username: github
-          key: ${{ secrets.KEY }}
-          script: |
-            sudo /root/transfermeit-backend/deploy.sh ${{ github.sha }}
+          fetch-depth: '0'
+      - name: Publish to Docker Registry
+        uses: docker/build-push-action@v1
+        with:
+          repository: ${{ github.repository }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          tag_with_ref: true
+          tag_with_sha: true
+      - name: Update Swarm
+        if: github.ref == 'refs/heads/master'
+        run: |
+          curl -f -X POST ${{ secrets.SWARM_HOOK }} \
+          -H 'Content-Type: application/x-www-form-urlencoded' \
+          -d 'service=notifi-backend_app' \
+          -d "repo=${{ github.repository }}" \
+          -d "sha=${{ github.sha }}" \
+          -d "token=${{ secrets.HOOK_TOKEN }}"

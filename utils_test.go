@@ -8,7 +8,7 @@ import (
 // CreditToFileUploadSize()
 var creditToBytes = []struct {
 	credit float64
-	bytes  int
+	bytes  int64
 }{
 	{0.0, freeFileUploadBytes},
 	{5.0, MegabytesToBytes(2750)},
@@ -18,7 +18,7 @@ var creditToBytes = []struct {
 func TestCreditToFileUploadSize(t *testing.T) {
 	for _, tt := range creditToBytes {
 		t.Run(fmt.Sprintf("%f", tt.credit), func(t *testing.T) {
-			v := CreditToFileUploadSize(float64(tt.credit))
+			v := CreditToFileUploadSize(tt.credit)
 			if v != tt.bytes {
 				t.Errorf("got %v, wanted %v", v, tt.bytes)
 			}
@@ -29,7 +29,7 @@ func TestCreditToFileUploadSize(t *testing.T) {
 // CreditToBandwidth()
 var creditToBandwidth = []struct {
 	credit    float64
-	bandwidth int
+	bandwidth int64
 }{
 	{0.0, freeBandwidthBytes},
 	{5.0, MegabytesToBytes(27500)},
@@ -39,7 +39,7 @@ var creditToBandwidth = []struct {
 func TestCreditToBandwidth(t *testing.T) {
 	for _, tt := range creditToBandwidth {
 		t.Run(fmt.Sprintf("%f", tt.credit), func(t *testing.T) {
-			v := CreditToBandwidth(float64(tt.credit))
+			v := CreditToBandwidth(tt.credit)
 			if v != tt.bandwidth {
 				t.Errorf("got %v, wanted %v", v, tt.bandwidth)
 			}
@@ -49,7 +49,7 @@ func TestCreditToBandwidth(t *testing.T) {
 
 // BytesToReadable()
 var bytesToReadable = []struct {
-	bytes    int
+	bytes    int64
 	readable string
 }{
 	{0, "0 bytes"},

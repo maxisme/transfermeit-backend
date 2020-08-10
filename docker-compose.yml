@@ -1,38 +1,50 @@
 version: '3.1'
 services:
   db:
-    image: mysql:5.6
+    image: mysql:5.7
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: transfermeit
       MYSQL_USER: transfermeit
       MYSQL_PASSWORD: transfermeit
-    container_name: transfermeit-backend-db
     ports:
-      - "127.0.0.1:3306:3306" # added local exposed ports for migration script
+      - "127.0.0.1:3306:3306"
     tty: true
-    restart: always
 
   migrate:
     image: migrate/migrate
+    network_mode: "host"
     volumes:
-      - .sql:/sql
-    command: ["-path", "/sql", "-database", "mysql://transfermeit:transfermeit@tcp(db:3306)/transfermeit", "up"]
-    links:
-      - db
+      - ./sql:/sql
+    command: ["-path", "/sql", "-database", "mysql://transfermeit:transfermeit@tcp(127.0.0.1:3306)/transfermeit", "up"]
+
+  storage:
+    image: minio/minio
+    ports:
+      - "127.0.0.1:9000:9000"
+    command: "server /data{1...4}"
+    environment:
+      MINIO_ACCESS_KEY: FfizvUST5eqWY0jhAulGKcIdLOz09VyvfE5
+      MINIO_SECRET_KEY: lhFC48WhyPqVPiQJvthIbdj22KnturqaayT
+
+  redis:
+    image: "redis:alpine"
+    ports:
+      - "127.0.0.1:6379:6379"
 
   app:
     build:
       context: .
-    restart: always
     environment:
-      db: transfermeit:transfermeit@tcp(db:3306)/transfermeit
-      sentry_dsn: ${sentry_dsn}
-      server_key: ${server_key:?err}
-      session_key: ${session_key:?err}
-      file_dir: ${file_dir:-/var/tmp/transfermeit/}
-    tty: true
+      DB_HOST: transfermeit:transfermeit@tcp(db:3306)/transfermeit
+      SERVER_KEY: ${SERVER_KEY:?err}
+      SESSION_KEY: ${SESSION_KEY:?err}
+      REDIS_HOST: "redis:6379"
+      MINIO_ACCESS_KEY: FfizvUST5eqWY0jhAulGKcIdLOz09VyvfE5
+      MINIO_SECRET_KEY: lhFC48WhyPqVPiQJvthIbdj22KnturqaayT
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:
       - db
+      - redis
+      - storage

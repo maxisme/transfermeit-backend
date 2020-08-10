@@ -4,39 +4,38 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	b64 "encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/getsentry/sentry-go"
 	"github.com/gorilla/sessions"
-	"log"
+	log "github.com/sirupsen/logrus"
+	"runtime"
+
 	"math"
 	"math/rand"
 	"net/http"
 	"os"
-	"runtime"
 	"strings"
-	"time"
 )
 
 var (
-	appSession *sessions.Session
-	store      = sessions.NewCookieStore([]byte(os.Getenv("session_key")))
+	AppSession *sessions.Session
+	store      = sessions.NewCookieStore([]byte(os.Getenv("SESSION_KEY")))
 )
 
 // Handle handles errors and logs them to sentry
-func Handle(err error) {
-	if err != nil {
-		pc, _, ln, _ := runtime.Caller(1)
-		details := runtime.FuncForPC(pc)
-		log.Printf("Fatal: %s - %s %d", err.Error(), details.Name(), ln)
-
-		// log to sentry
-		sentry.CaptureException(err)
-		sentry.Flush(time.Second * 5)
-	}
-}
+//func Handle(err error) {
+//	if err != nil {
+//		pc, _, ln, _ := runtime.Caller(1)
+//		details := runtime.FuncForPC(pc)
+//		log.Printf("Fatal: %s - %s %d", err.Error(), details.Name(), ln)
+//
+//		// log to sentry
+//		sentry.CaptureException(err)
+//		sentry.Flush(time.Second * 5)
+//	}
+//}
 
 // UpdateErr returns an error if no rows have been effected
 func UpdateErr(res sql.Result, err error) error {
@@ -86,29 +85,21 @@ func Hash(str string) string {
 		return str
 	}
 	v := sha256.Sum256([]byte(str))
-	return string(b64.StdEncoding.EncodeToString(v[:]))
-}
-
-// HashWithBytes hashes bytes
-func HashWithBytes(bytes []byte) string {
-	hasher := sha256.New()
-	_, err := hasher.Write(bytes)
-	Handle(err)
-	return hex.EncodeToString(hasher.Sum(nil))
+	return b64.StdEncoding.EncodeToString(v[:])
 }
 
 // MegabytesToBytes converts MB to bytes
-func MegabytesToBytes(megabytes float64) int {
-	return int(megabytes * 1000000.0)
+func MegabytesToBytes(megabytes float64) int64 {
+	return int64(megabytes * 1000000.0)
 }
 
 // BytesToMegabytes converts bytes to MB
-func BytesToMegabytes(bytes int) float64 {
+func BytesToMegabytes(bytes int64) float64 {
 	return float64(bytes) / 1000000.0
 }
 
 // CreditToFileUploadSize converts user credit to user max file upload size
-func CreditToFileUploadSize(credit float64) (bytes int) {
+func CreditToFileUploadSize(credit float64) (bytes int64) {
 	bytes = freeFileUploadBytes
 	for {
 		if credit > 0 {
@@ -122,7 +113,7 @@ func CreditToFileUploadSize(credit float64) (bytes int) {
 }
 
 // CreditToBandwidth converts user credit to user bandwidth
-func CreditToBandwidth(credit float64) (bytes int) {
+func CreditToBandwidth(credit float64) (bytes int64) {
 	bytes = freeBandwidthBytes
 	for {
 		if credit > 0 {
@@ -135,7 +126,7 @@ func CreditToBandwidth(credit float64) (bytes int) {
 	return
 }
 
-// WriteJSON writes JSON response
+// WriteJSON writes interface as JSON to http.ResponseWriter
 func WriteJSON(w http.ResponseWriter, v interface{}) error {
 	jsonReply, err := json.Marshal(v)
 	if err != nil {
@@ -148,40 +139,25 @@ func WriteJSON(w http.ResponseWriter, v interface{}) error {
 
 // WriteError will write a http.Error as well as logging the error locally and to Sentry
 func WriteError(w http.ResponseWriter, r *http.Request, code int, message string) {
-	// find where this function has been called from
-	pc, _, line, _ := runtime.Caller(1)
-	details := runtime.FuncForPC(pc)
-	calledFrom := fmt.Sprintf("%s line:%d", details.Name(), line)
-
-	log.Printf("HTTP error: message: %s code: %d from:%s \n", message, code, calledFrom)
-
-	// log to sentry
-	if hub := sentry.GetHubFromContext(r.Context()); hub != nil {
-		hub.WithScope(func(scope *sentry.Scope) {
-			scope.SetExtra("Called From", calledFrom)
-			scope.SetExtra("Header Code", code)
-			hub.CaptureMessage(message)
-		})
-	}
+	LogSkip(r, log.ErrorLevel, 2, message)
 
 	http.Error(w, message, code)
 	w.Write([]byte(message))
 }
 
 // InitSession initiates a http session
-func InitSession(r *http.Request) *sessions.Session {
-	if appSession != nil {
+func InitSession(r *http.Request) (*sessions.Session, error) {
+	if AppSession != nil {
 		// there already is a global session so use that
-		return appSession
+		return AppSession, nil
 	}
 	session, err := store.Get(r, uploadSessionName)
-	appSession = session // set global session
-	Handle(err)
-	return session
+	AppSession = session // set global session
+	return session, err
 }
 
 // BytesToReadable converts bytes to a readable string (MB, GB, etc...)
-func BytesToReadable(bytes int) string {
+func BytesToReadable(bytes int64) string {
 	if bytes == 0 {
 		return "0 bytes"
 	}
@@ -195,4 +171,37 @@ func BytesToReadable(bytes int) string {
 		stringVal,
 		units[int(base)],
 	)
+}
+
+func Log(r *http.Request, level log.Level, args ...interface{}) {
+	LogSkip(r, level, 3, args...)
+}
+
+func LogSkip(r *http.Request, level log.Level, skip int, args ...interface{}) {
+	fields := log.Fields{}
+	if len(r.Header.Get("X-B3-Traceid")) > 0 {
+		fields["X-B3-Traceid"] = r.Header.Get("X-B3-Traceid")
+	}
+	if len(os.Getenv("COMMIT_HASH")) > 0 {
+		fields["commit-hash"] = os.Getenv("COMMIT_HASH")[:7]
+	}
+	pc, _, ln, _ := runtime.Caller(skip)
+	details := runtime.FuncForPC(pc)
+	fields["method"] = details.Name()
+	fields["method-line"] = ln
+
+	// write log
+	log.WithFields(fields).Log(level, args...)
+
+	if level == log.ErrorLevel {
+		// log to sentry
+		if hub := sentry.GetHubFromContext(r.Context()); hub != nil {
+			hub.WithScope(func(scope *sentry.Scope) {
+				for key := range fields {
+					scope.SetTag(key, fmt.Sprintf("%v", fields[key]))
+				}
+				hub.CaptureMessage(fmt.Sprint(args...))
+			})
+		}
+	}
 }

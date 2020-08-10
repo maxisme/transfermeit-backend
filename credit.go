@@ -8,13 +8,13 @@ import (
 const CreditCodeLen = 100
 
 // GetUserPermCode requests a users perm code if they have one
-func GetUserPermCode(db *sql.DB, user User) (permCode sql.NullString, customCode sql.NullString) {
+func GetUserPermCode(db *sql.DB, user User) (permCode sql.NullString, customCode sql.NullString, err error) {
 	result := db.QueryRow(`
 	SELECT perm_user_code, custom_user_code
 	FROM credit
 	WHERE UUID = ?
 	LIMIT 1`, Hash(user.UUID))
-	Handle(result.Scan(&permCode, &customCode))
+	err = result.Scan(&permCode, &customCode)
 	return
 }
 
@@ -52,10 +52,10 @@ func SetCreditCode(db *sql.DB, user User, activationCode string) error {
 }
 
 // GetCredit fetches the amount of credit the user has linked to their account
-func GetCredit(db *sql.DB, user User) (credit sql.NullFloat64) {
+func GetCredit(db *sql.DB, user User) (credit sql.NullFloat64, err error) {
 	result := db.QueryRow(`SELECT SUM(credit) as total_credit
 	FROM credit
 	WHERE UUID = ?`, Hash(user.UUID))
-	Handle(result.Scan(&credit))
-	return credit
+	err = result.Scan(&credit)
+	return credit, nil
 }

@@ -3,7 +3,7 @@ package main
 import (
 	"database/sql"
 	"github.com/patrickmn/go-cache"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -31,8 +31,8 @@ type User struct {
 	PublicKey     string    `json:"-"`
 	UUID          string    `json:"-"`
 	Code          string    `json:"user_code"`
-	BandwidthLeft int       `json:"bw_left"`
-	MaxFileSize   int       `json:"max_fs"`
+	BandwidthLeft int64     `json:"bw_left"`
+	MaxFileSize   int64     `json:"max_fs"`
 	Expiry        time.Time `json:"end_time"`
 	MinsAllowed   int       `json:"mins_allowed"`
 	WantedMins    int       `json:"wanted_mins"`
@@ -42,27 +42,27 @@ type User struct {
 }
 
 // Store stores the permanent parts of the User struct in the database
-func (user User) Store(db *sql.DB) {
+func (user User) Store(db *sql.DB) error {
 	_, err := db.Exec(`
 	INSERT INTO user (code, UUID, UUID_key, public_key, code_end_dttm, registered_dttm)
 	VALUES (?, ?, ?, ?, ?, NOW())`, user.Code, Hash(user.UUID), Hash(user.UUIDKey), user.PublicKey, user.Expiry)
-	Handle(err)
+	return err
 }
 
 // Update updates the permanent parts of the User struct in the database
-func (user User) Update(db *sql.DB) {
-	Handle(UpdateErr(db.Exec(`
+func (user User) Update(db *sql.DB) error {
+	return UpdateErr(db.Exec(`
 	UPDATE user 
 	SET code = ?, public_key = ?, wanted_mins = ?, code_end_dttm = ?
-	WHERE UUID=?`, user.Code, user.PublicKey, user.WantedMins, user.Expiry, Hash(user.UUID))))
+	WHERE UUID=?`, user.Code, user.PublicKey, user.WantedMins, user.Expiry, Hash(user.UUID)))
 }
 
 // UpdateUUIDKey updates the UUID Key of a user
-func (user User) UpdateUUIDKey(db *sql.DB) {
-	Handle(UpdateErr(db.Exec(`
+func (user User) UpdateUUIDKey(db *sql.DB) error {
+	return UpdateErr(db.Exec(`
 	UPDATE user 
 	SET UUID_key = ?
-	WHERE UUID=?`, Hash(user.UUIDKey), Hash(user.UUID))))
+	WHERE UUID=?`, Hash(user.UUIDKey), Hash(user.UUID)))
 }
 
 // GetTier fetches the user tier level
@@ -133,17 +133,21 @@ func (user User) GetUUIDKey(db *sql.DB) (string, bool) {
 	return key, false
 }
 
-func (user *User) SetCredit(db *sql.DB) {
+func (user *User) SetCredit(db *sql.DB) error {
 	if user.Credit > 0 {
 		// already set the users credit so don't bother trying again
-		return
+		return nil
 	}
-	credit := GetCredit(db, *user)
+	credit, err := GetCredit(db, *user)
+	if err != nil {
+		return err
+	}
 	if credit.Valid {
 		user.Credit = credit.Float64
 	} else {
 		user.Credit = 0
 	}
+	return nil
 }
 
 // GetBandwidthLeft fetches the amount of bandwidth the user has left for today
@@ -187,38 +191,42 @@ func (user User) IsValid(db *sql.DB) bool {
 }
 
 // GetWantedMins fetches the amount of minutes the user wants their code to last for
-func (user *User) GetWantedMins(db *sql.DB) {
+func (user *User) GetWantedMins(db *sql.DB) error {
 	result := db.QueryRow(`SELECT wanted_mins
 	FROM user
 	WHERE UUID = ?`, Hash(user.UUID))
-	err := result.Scan(&user.WantedMins)
-	Handle(err)
+	return result.Scan(&user.WantedMins)
 }
 
-func getAllDisplayUsers(db *sql.DB) []displayUser {
+func getAllDisplayUsers(db *sql.DB) ([]displayUser, error) {
 	var users []displayUser
 	u, found := c.Get("users")
 	if found {
 		users = u.([]displayUser)
 	} else {
-		log.Println("Refreshed user cache")
+		log.Info("Refreshed user cache")
 		// fetch users from db if not in cache
 		rows, err := db.Query(`SELECT UUID, public_key, is_connected FROM user`)
+		if err != nil {
+			return nil, err
+		}
 		defer rows.Close()
-		Handle(err)
 		for rows.Next() {
 			var u displayUser
 			err = rows.Scan(&u.UUID, &u.PubKey, &u.Connected)
-			Handle(err)
+			if err != nil {
+				return nil, err
+			}
+
 			users = append(users, u)
 		}
 		c.Set("users", users, cache.DefaultExpiration)
 	}
-	return users
+	return users, nil
 }
 
 // CodeToUser converts a users code to a User.
-func CodeToUser(db *sql.DB, code string) (user User) {
+func CodeToUser(db *sql.DB, code string) (user User, err error) {
 	if len(code) != codeLen {
 		return
 	}
@@ -226,14 +234,16 @@ func CodeToUser(db *sql.DB, code string) (user User) {
 	FROM user
 	WHERE code = ?
 	AND code_end_dttm >= NOW()`, code)
-	err := result.Scan(&user.UUID, &user.PublicKey)
-	Handle(err)
+	err = result.Scan(&user.UUID, &user.PublicKey)
 	return
 }
 
 // SetUsersPermCode sets the users perm code as long as it matches what they have passed
-func SetUsersPermCode(db *sql.DB, user *User, expectedPermCode string) {
-	permCode, customCode := GetUserPermCode(db, *user)
+func SetUsersPermCode(db *sql.DB, user *User, expectedPermCode string) error {
+	permCode, customCode, err := GetUserPermCode(db, *user)
+	if err != nil {
+		return err
+	}
 	var code string
 	if customCode.Valid {
 		code = customCode.String
@@ -243,18 +253,19 @@ func SetUsersPermCode(db *sql.DB, user *User, expectedPermCode string) {
 	if code == expectedPermCode {
 		user.Code = expectedPermCode
 	}
+	return nil
 }
 
 // IsConnected will store if a user is connected to socket depending on `connected`
-func (user User) IsConnected(db *sql.DB, connected bool) {
+func (user User) IsConnected(db *sql.DB, connected bool) error {
 	isConnected := 1
 	if !connected {
 		isConnected = 0
 	}
 
-	Handle(UpdateErr(db.Exec(`UPDATE user
+	return UpdateErr(db.Exec(`UPDATE user
 	SET is_connected = ?
-	WHERE UUID = ?`, isConnected, Hash(user.UUID))))
+	WHERE UUID = ?`, isConnected, Hash(user.UUID)))
 }
 
 func purgeCode(db *sql.DB, user User) {
@@ -272,7 +283,7 @@ func codeExists(db *sql.DB, code string) bool {
 	return err == nil && id > 0
 }
 
-func getUserUsedBandwidth(db *sql.DB, user User) (bytes int) {
+func getUserUsedBandwidth(db *sql.DB, user User) (bytes int64) {
 	result := db.QueryRow(`SELECT SUM(size) as used_bandwidth
 	FROM transfer
 	WHERE from_UUID = ? 

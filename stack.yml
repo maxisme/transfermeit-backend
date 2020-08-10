@@ -1,0 +1,52 @@
+version: '3.8'
+services:
+  app:
+    image: maxisme/transfermeit-backend:latest
+    env_file:
+      - ".env"
+    deploy:
+      mode: global
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.transfermeit-backend.rule=Host(`sock.transferme.it`)"
+        - "traefik.http.routers.transfermeit-backend.entrypoints=web-secure"
+        - "traefik.http.routers.transfermeit-backend.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.transfermeit-backend.middlewares=404"
+        - "traefik.http.services.transfermeit-backend.loadbalancer.server.port=8080"
+    networks:
+      - traefik
+      - db
+      - logging
+
+  storage:
+    image: minio/minio
+    env_file:
+      - ".env"
+    volumes:
+      - ./minio:/export
+    deploy:
+      mode: global
+    command: server http://storage/export
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+
+  migrate:
+    image: migrate/migrate
+    networks:
+      - db
+    volumes:
+      - ./sql:/sql
+    command: ["-path", "/sql", "-database", "mysql://${DB_HOST:?err}", "up"]
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: none
+
+networks:
+  traefik:
+    external: true
+  db:
+    external: true
+  logging:
+    external: true

@@ -53,7 +53,7 @@ func TestIsValidPublicKey(t *testing.T) {
 	for _, tt := range keys {
 		t.Run(tt.in, func(t *testing.T) {
 			v := IsValidPublicKey(tt.in)
-			if v != tt.out {
+			if (v != nil) != tt.out {
 				t.Errorf("got %v, wanted %v", v, tt.out)
 			}
 		})

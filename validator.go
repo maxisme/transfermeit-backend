@@ -4,6 +4,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
+	"fmt"
 	uuid "github.com/satori/go.uuid"
 	"regexp"
 	"strings"
@@ -28,22 +29,20 @@ func IsValidUUID(str string) bool {
 }
 
 // IsValidPublicKey checks if a string is a valid public key
-func IsValidPublicKey(pubKey string) bool {
+func IsValidPublicKey(pubKey string) error {
 	decodedPublicKey, err := base64.StdEncoding.DecodeString(pubKey)
-	Handle(err)
 	if err != nil {
-		return false
+		return err
 	}
 
 	re, err := x509.ParsePKIXPublicKey(decodedPublicKey)
-	Handle(err)
 	if err != nil {
-		return false
+		return err
 	}
 
 	pub := re.(*rsa.PublicKey)
 	if pub == nil {
-		return false
+		return fmt.Errorf("unable to typeset")
 	}
-	return true
+	return nil
 }

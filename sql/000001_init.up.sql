@@ -48,7 +48,7 @@ create table if not exists transfer
     id            int auto_increment
         primary key,
     expiry_dttm   timestamp         default CURRENT_TIMESTAMP null,
-    file_path     varchar(200)                                null,
+    object_name     varchar(200)                                null,
     size          int(255) unsigned default 0                 not null,
     from_UUID     varchar(255)      default ''                not null,
     to_UUID       varchar(255)                                null,
@@ -58,7 +58,7 @@ create table if not exists transfer
     file_hash     varchar(128)                                null,
     password      varchar(1000)                               null,
     constraint path
-        unique (file_path),
+        unique (object_name),
     constraint transfer_ibfk_1
         foreign key (from_UUID) references user (UUID),
     constraint transfer_ibfk_2
