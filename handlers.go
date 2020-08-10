@@ -274,7 +274,7 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 	code := r.Form.Get("code")
 	friend, err := CodeToUser(s.db, code)
 	if err != nil {
-		WriteError(w, r, http.StatusBadRequest, err.Error())
+		WriteError(w, r, InvalidFriendErrorCode, err.Error())
 		return
 	}
 	if friend.UUID == "" || friend.PublicKey == "" {
@@ -312,7 +312,10 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	if transfer.AlreadyToUser(s.db) {
 		// already uploading to friend so delete the currently in process transfer
-		go transfer.Completed(s, true, false)
+		if err := transfer.Completed(s, true, false); err != nil {
+			WriteError(w, r, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 
 	transfer.ID, err = transfer.InitialStore(s.db)
@@ -396,7 +399,7 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	// write file to minio
 	objectName := RandomString(userDirLen) + "_" + handler.Filename
-	ul, err := s.minio.PutObject(context.Background(), bucketName, objectName, file, handler.Size, minio.PutObjectOptions{
+	_, err = s.minio.PutObject(context.Background(), bucketName, objectName, file, handler.Size, minio.PutObjectOptions{
 		ContentType: fileContentType,
 	})
 	if err != nil {
@@ -408,7 +411,6 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	transfer := sessionTransfer
 	transfer.ObjectName = objectName
 	transfer.expiry = time.Now().Add(time.Minute * time.Duration(sessionTransfer.from.WantedMins))
-	transfer.hash = ul.Key
 	transfer.Size = handler.Size
 
 	if err := transfer.Store(s.db); err != nil {
@@ -501,18 +503,24 @@ func (s *Server) CompletedDownloadHandler(w http.ResponseWriter, r *http.Request
 	var transfer = Transfer{
 		to:         User{UUID: user.UUID},
 		ObjectName: r.Form.Get("object_name"),
-		hash:       r.Form.Get("hash"),
 	}
 
-	failed := true
-	if transfer.hash != "" {
-		failed = false
-		transfer.GetPasswordAndUUID(s.db)
+	failedTransfer := false
+	if err := transfer.GetPasswordAndUUID(s.db); err != nil {
+		failedTransfer = true
+		WriteError(w, r, http.StatusInternalServerError, err.Error())
+	} else {
 		if transfer.password == "" || transfer.from.UUID == "" {
+			failedTransfer = true
 			WriteError(w, r, http.StatusInternalServerError, "No password for user")
 		}
-		_, _ = w.Write([]byte(transfer.password))
 	}
 
-	transfer.Completed(s, failed, false)
+	if err := transfer.Completed(s, failedTransfer, false); err != nil {
+		WriteError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	_, err := w.Write([]byte(transfer.password))
+	Log(r, log.ErrorLevel, err)
 }

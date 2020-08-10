@@ -10,6 +10,7 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/gorilla/sessions"
 	log "github.com/sirupsen/logrus"
+
 	"runtime"
 
 	"math"
@@ -139,7 +140,7 @@ func WriteJSON(w http.ResponseWriter, v interface{}) error {
 
 // WriteError will write a http.Error as well as logging the error locally and to Sentry
 func WriteError(w http.ResponseWriter, r *http.Request, code int, message string) {
-	LogSkip(r, log.ErrorLevel, 2, message)
+	LogWithSkip(r, log.ErrorLevel, 2, message)
 
 	http.Error(w, message, code)
 	w.Write([]byte(message))
@@ -174,10 +175,10 @@ func BytesToReadable(bytes int64) string {
 }
 
 func Log(r *http.Request, level log.Level, args ...interface{}) {
-	LogSkip(r, level, 3, args...)
+	LogWithSkip(r, level, 3, args...)
 }
 
-func LogSkip(r *http.Request, level log.Level, skip int, args ...interface{}) {
+func LogWithSkip(r *http.Request, level log.Level, skip int, args ...interface{}) {
 	fields := log.Fields{}
 	if len(r.Header.Get("X-B3-Traceid")) > 0 {
 		fields["X-B3-Traceid"] = r.Header.Get("X-B3-Traceid")
@@ -205,3 +206,10 @@ func LogSkip(r *http.Request, level log.Level, skip int, args ...interface{}) {
 		}
 	}
 }
+
+//func Exec(r *http.Request, db *sql.DB, query string, args ...interface{}) {
+//
+//	ctx, span = tracer.Start(ctx, "Sub operation...")
+//	defer span.End()
+//	db.Exec(query, args...)
+//}

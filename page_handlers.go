@@ -20,7 +20,6 @@ type displayUser struct {
 type displayTransfer struct {
 	ToUUID      string
 	FromUUID    string
-	FileHash    string
 	FileExpiry  time.Time
 	FileSize    string
 	Downloading bool
@@ -41,7 +40,7 @@ func getAllDisplayTransfers(db *sql.DB) ([]displayTransfer, error) {
 		log.Info("Refreshed transfer cache")
 		// fetch transfers from db if not in cache
 		rows, err := db.Query(`
-		SELECT from_UUID, to_UUID, expiry_dttm, size, file_hash, failed, updated_dttm, finished_dttm
+		SELECT from_UUID, to_UUID, expiry_dttm, size, failed, updated_dttm, finished_dttm
 		FROM transfer`)
 		if err != nil {
 			return nil, err
@@ -55,7 +54,7 @@ func getAllDisplayTransfers(db *sql.DB) ([]displayTransfer, error) {
 				updated  mysql.NullTime
 				finished mysql.NullTime
 			)
-			err = rows.Scan(&dt.FromUUID, &dt.ToUUID, &dt.FileExpiry, &fileSize, &dt.FileHash, &dt.Failed, &updated, &finished)
+			err = rows.Scan(&dt.FromUUID, &dt.ToUUID, &dt.FileExpiry, &fileSize, &dt.Failed, &updated, &finished)
 			if err != nil {
 				return nil, err
 			}

@@ -131,6 +131,7 @@ func TestUploadDownloadCycle(t *testing.T) {
 	rr := postRequest(form2, s.DownloadHandler)
 	if rr.Code != 200 || int64(len(rr.Body.Bytes())) != fileSize {
 		t.Errorf("Got %v expected %v", len(rr.Body.Bytes()), fileSize)
+		return
 	}
 
 	// run complete handler to receive password
@@ -138,33 +139,38 @@ func TestUploadDownloadCycle(t *testing.T) {
 	rr2 := postRequest(form2, s.CompletedDownloadHandler)
 	if rr2.Body.String() != password {
 		t.Errorf("Got %v expected %v", rr2.Body.String(), password)
+		return
 	}
 
 	// verify file was deleted
-	_, err := s.minio.GetObject(context.Background(), bucketName, objectName, minio.GetObjectOptions{})
-	if err == nil {
-		t.Errorf("object at path: '%v' should have been deleted", objectName)
+	obj, _ := s.minio.GetObject(context.Background(), bucketName, objectName, minio.GetObjectOptions{})
+	stat, _ := obj.Stat()
+	if stat.Size > 0 {
+		t.Errorf("object at path: '%v' should have been deleted - %v", objectName, stat)
+		return
 	}
 
 	// fetch updated user stats from socket
 	message = readSocketMessage(user1Ws)
 	if message.User.BandwidthLeft != freeBandwidthBytes-fileSize {
 		t.Errorf("expected %v got %v", freeBandwidthBytes-fileSize, message.User.BandwidthLeft)
+		return
 	}
 
 	// fetch success notification
 	message = readSocketMessage(user1Ws)
 	if message.Message.Title != "Successful Transfer" {
 		t.Errorf("expected: %v got %v", "Successful Transfer", message.Message.Title)
+		return
 	}
 }
 
 func TestInvalidUploadFileSizeVariable(t *testing.T) {
 	user1, form1 := genUser()
 	form1.Set("UUID_key", user1.UUIDKey)
-	rr := postRequest(form1, http.HandlerFunc(s.InitUploadHandler))
-	if rr.Code != 401 { // TODO test body
-		t.Errorf("expected: %d got %d - %s", 401, rr.Code, rr.Body.String())
+	rr := postRequest(form1, s.InitUploadHandler)
+	if rr.Code != InvalidFileSizeErrorCode {
+		t.Errorf("expected: %d got %d - %s", InvalidFileSizeErrorCode, rr.Code, rr.Body.String())
 	}
 }
 
@@ -173,9 +179,9 @@ func TestUploadToNonExistingFriend(t *testing.T) {
 	form1.Set("UUID_key", user1.UUIDKey)
 	form1.Set("filesize", strconv.Itoa(123))
 	form1.Set("code", RandomString(codeLen))
-	rr := postRequest(form1, http.HandlerFunc(s.InitUploadHandler))
-	if rr.Code != 402 { // TODO test body
-		t.Errorf("expected: %d got %d - %s", 402, rr.Code, rr.Body.String())
+	rr := postRequest(form1, s.InitUploadHandler)
+	if rr.Code != InvalidFriendErrorCode {
+		t.Errorf("expected: %d got %d - %s", InvalidFriendErrorCode, rr.Code, rr.Body.String())
 	}
 }
 
@@ -184,9 +190,9 @@ func TestInvalidSendUploadToSelf(t *testing.T) {
 	form1.Set("UUID_key", user1.UUIDKey)
 	form1.Set("filesize", strconv.Itoa(123))
 	form1.Set("code", user1.Code)
-	rr := postRequest(form1, http.HandlerFunc(s.InitUploadHandler))
-	if rr.Code != 403 { // TODO test body
-		t.Errorf("expected: %d got %d - %s", 403, rr.Code, rr.Body.String())
+	rr := postRequest(form1, s.InitUploadHandler)
+	if rr.Code != SendToSelfErrorCode {
+		t.Errorf("expected: %d got %d - %s", SendToSelfErrorCode, rr.Code, rr.Body.String())
 	}
 }
 
@@ -200,22 +206,29 @@ func TestTooLargeUpload(t *testing.T) {
 	form1.Set("UUID_key", user1.UUIDKey)
 	form1.Set("filesize", strconv.Itoa(freeFileUploadBytes+1))
 	form1.Set("code", user2.Code)
-	rr := postRequest(form1, http.HandlerFunc(s.InitUploadHandler))
-	if rr.Code != 405 { // TODO test body
-		t.Errorf("expected: %d got %d - %s", 405, rr.Code, rr.Body.String())
+	rr := postRequest(form1, s.InitUploadHandler)
+	if rr.Code != FileSizeLimitErrorCode {
+		t.Errorf("expected: %d got %d - %s", FileSizeLimitErrorCode, rr.Code, rr.Body.String())
 	}
 }
 
 func TestTwoPendingTransfers(t *testing.T) {
 	user1, form1 := genUser()
 	user2, _ := genUser()
-	_, _, ws, _ := connectWSS(user1, form1)
+	_, _, user1Ws, _ := connectWSS(user1, form1)
+	funnel := &ws.Funnel{
+		Key:    user1.UUID,
+		WSConn: user1Ws,
+		PubSub: s.redis.Subscribe(user1.UUID),
+	}
+	s.funnels.Add(s.redis, funnel)
 
 	_ = initUpload(form1, user1, user2, 10)
 	_ = initUpload(form1, user1, user2, 10)
 
-	m := readSocketMessage(ws)
+	m := readSocketMessage(user1Ws)
 	expected := "Cancelled Transfer"
+	log.Printf("%v", m)
 	if m.Message.Title != expected {
 		t.Errorf("expected: %s got %s", expected, m.Message.Title)
 	}

@@ -38,8 +38,7 @@ func (transfer *Transfer) GetPasswordAndUUID(db *sql.DB) error {
 	FROM transfer
 	WHERE finished_dttm IS NULL
 	AND to_UUID = ?
-	AND object_name = ?
-	AND file_hash = ?`, Hash(transfer.to.UUID), transfer.ObjectName, transfer.hash)
+	AND object_name = ?`, Hash(transfer.to.UUID), transfer.ObjectName)
 	return result.Scan(&transfer.password, &transfer.from.UUID)
 }
 
@@ -76,8 +75,8 @@ func (transfer Transfer) Store(db *sql.DB) error {
 	log.Info(transfer.expiry)
 	return UpdateErr(db.Exec(`
 	UPDATE transfer 
-	SET size=?, file_hash=?, object_name=?, password=?, expiry_dttm=?, updated_dttm=NOW()
-	WHERE id=?`, transfer.Size, transfer.hash, transfer.ObjectName, transfer.password, transfer.expiry, transfer.ID))
+	SET size=?, object_name=?, password=?, expiry_dttm=?, updated_dttm=NOW()
+	WHERE id=?`, transfer.Size, transfer.ObjectName, transfer.password, transfer.expiry, transfer.ID))
 }
 
 // KeepAliveTransfer will update the updated_dttm of the transfer to prevent the cleanup CleanExpiredTransfers()
@@ -103,12 +102,10 @@ func (transfer Transfer) Completed(s *Server, failed bool, expired bool) error {
 		return err
 	}
 
-	go func() {
-		err := s.minio.RemoveObject(context.Background(), bucketName, transfer.ObjectName, minio.RemoveObjectOptions{})
-		if err != nil {
-
-		}
-	}()
+	err = s.minio.RemoveObject(context.Background(), bucketName, transfer.ObjectName, minio.RemoveObjectOptions{})
+	if err != nil {
+		return err
+	}
 
 	message := DesktopMessage{}
 	if expired {

@@ -55,7 +55,6 @@ create table if not exists transfer
     updated_dttm  timestamp                                   null,
     finished_dttm timestamp                                   null,
     failed        tinyint(1)        default 0                 not null,
-    file_hash     varchar(128)                                null,
     password      varchar(1000)                               null,
     constraint path
         unique (object_name),

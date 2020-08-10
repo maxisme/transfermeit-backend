@@ -1,4 +1,4 @@
-version: '3.1'
+version: '3.8'
 services:
   db:
     image: mysql:5.7
@@ -9,7 +9,10 @@ services:
       MYSQL_PASSWORD: transfermeit
     ports:
       - "127.0.0.1:3306:3306"
-    tty: true
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
 
   migrate:
     image: migrate/migrate
@@ -36,15 +39,55 @@ services:
     build:
       context: .
     environment:
-      DB_HOST: transfermeit:transfermeit@tcp(db:3306)/transfermeit
-      SERVER_KEY: ${SERVER_KEY:?err}
-      SESSION_KEY: ${SESSION_KEY:?err}
+      DB_HOST: root:root@tcp(db:3306)/transfermeit
+      SERVER_KEY: QVcnKozlSUvRSPj0jqjya7vZJLrkKUvKIq0WkpKN
+      SESSION_KEY: rps2P8irs0mT5uCgicv8m5PMq9a6WyzbxL7HWeRK
       REDIS_HOST: "redis:6379"
       MINIO_ACCESS_KEY: FfizvUST5eqWY0jhAulGKcIdLOz09VyvfE5
       MINIO_SECRET_KEY: lhFC48WhyPqVPiQJvthIbdj22KnturqaayT
-    ports:
-      - "127.0.0.1:8080:8080"
+      MINIO_ENDPOINT: "storage:9000"
+      COLLECTOR_HOSTNAME: jaeger:14268
     depends_on:
+      - db
+      - storage
+    links:
       - db
       - redis
       - storage
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.transfermeit.rule=Host(`localhost`)"
+      - "traefik.http.routers.transfermeit.entrypoints=web"
+      - "traefik.http.services.transfermeit.loadbalancer.server.port=8080"
+
+  traefik:
+    image: "traefik"
+    command:
+      - "--log.level=DEBUG"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--tracing=true"
+      - "--tracing.serviceName=traefik"
+      - "--tracing.jaeger.samplingServerURL=http://jaeger:5778/sampling"
+      - "--tracing.jaeger.collector.endpoint=http://jaeger:14268/api/traces?format=zipkin.thrift"
+      - "--tracing.jaeger.gen128Bit"
+      - "--tracing.jaeger.propagation=b3"
+    ports:
+      - "80:80"
+      - "8080:8080"
+    depends_on:
+      - jaeger
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "127.0.0.1:16686:16686"
+      - "127.0.0.1:14268:14268"
+    environment:
+      JAEGER_REPORTER_LOG_SPANS: "true"
+    command:
+      - "--log-level=debug"

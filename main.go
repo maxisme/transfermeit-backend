@@ -12,6 +12,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/maxisme/notifi-backend/conn"
 	"github.com/maxisme/notifi-backend/ws"
+	"github.com/maxisme/transfermeit-backend/tracer"
 	"github.com/minio/minio-go/v7"
 	"github.com/patrickmn/go-cache"
 	"github.com/robfig/cron"
@@ -55,9 +56,7 @@ type Server struct {
 
 func main() {
 	// load .env
-	if err := godotenv.Load(); err != nil {
-		panic(err)
-	}
+	_ = godotenv.Load()
 
 	// SENTRY
 	sentryDsn := os.Getenv("SENTRY_DSN")
@@ -68,8 +67,12 @@ func main() {
 	}
 	sentryMiddleware := sentryhttp.New(sentryhttp.Options{})
 
+	// start tracer
+	fn := tracer.Init("Transfer Me It", os.Getenv("COLLECTOR_HOSTNAME"))
+	defer fn()
+
 	// connect to db
-	dbConn, err := conn.DbConn(os.Getenv("DB_HOST") + "/transfermeit?parseTime=true&loc=" + time.Local.String())
+	dbConn, err := conn.DbConn(os.Getenv("DB_HOST") + "?parseTime=true&loc=" + time.Local.String())
 	if err != nil {
 		panic(err)
 	}
@@ -111,22 +114,24 @@ func main() {
 
 	// middleware
 	r.Use(sentryMiddleware.Handle)
+	r.Use(tracer.Middleware)
 	r.HandleFunc("/health", func(writer http.ResponseWriter, request *http.Request) {})
-
-	mux := r
-	mux.Use(ServerKeyMiddleware)
-
-	// HANDLERS
-	mux.HandleFunc("/ws", s.WSHandler)
-	mux.HandleFunc("/code", s.CreateCodeHandler)
-	mux.HandleFunc("/init-upload", s.InitUploadHandler)
-	mux.HandleFunc("/upload", s.UploadHandler)
-	mux.HandleFunc("/download", s.DownloadHandler)
-	mux.HandleFunc("/completed-download", s.CompletedDownloadHandler)
-	mux.HandleFunc("/register", s.RegisterCreditHandler)
-	mux.HandleFunc("/toggle-perm-code", s.TogglePermCodeHandler)
-	mux.HandleFunc("/custom-code", s.CustomCodeHandler)
-
 	r.HandleFunc("/live", s.LiveHandler)
+
+	r.Group(func(mux chi.Router) {
+		mux.Use(ServerKeyMiddleware)
+
+		// HANDLERS
+		mux.HandleFunc("/ws", s.WSHandler)
+		mux.HandleFunc("/code", s.CreateCodeHandler)
+		mux.HandleFunc("/init-upload", s.InitUploadHandler)
+		mux.HandleFunc("/upload", s.UploadHandler)
+		mux.HandleFunc("/download", s.DownloadHandler)
+		mux.HandleFunc("/completed-download", s.CompletedDownloadHandler)
+		mux.HandleFunc("/register", s.RegisterCreditHandler)
+		mux.HandleFunc("/toggle-perm-code", s.TogglePermCodeHandler)
+		mux.HandleFunc("/custom-code", s.CustomCodeHandler)
+	})
+
 	graceful.ListenAndServe(&http.Server{Addr: ":8080", Handler: r})
 }

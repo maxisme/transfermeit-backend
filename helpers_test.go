@@ -37,7 +37,7 @@ const testB64PubKey = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvxvSoA5+YJ0dK
 
 func initDB(t *testing.M) {
 	rand.Seed(time.Now().UTC().UnixNano())
-	TESTDBNAME := "transfermeit_test"
+	TESTDBNAME := "transfermeit"
 
 	// initialise db
 	db, err := conn.DbConn("root:root@tcp(127.0.0.1:3306)/?multiStatements=True&loc=" + time.Local.String())
