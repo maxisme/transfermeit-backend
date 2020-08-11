@@ -27,7 +27,6 @@ jobs:
         go: ['1.12', '1.13', '1.14']
     steps:
       - uses: actions/checkout@master
-        -
       - name: Build the stack
         run: docker-compose up -d -f docker-compose-test.yml
 
