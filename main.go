@@ -18,7 +18,6 @@ import (
 	"github.com/patrickmn/go-cache"
 	"github.com/robfig/cron"
 	log "github.com/sirupsen/logrus"
-	"go.opentelemetry.io/otel/api/trace"
 
 	"net/http"
 	"os"
@@ -70,10 +69,14 @@ func main() {
 	sentryMiddleware := sentryhttp.New(sentryhttp.Options{})
 
 	// start tracer
-	fn := tracer.Init("Transfer Me It", os.Getenv("COLLECTOR_HOSTNAME"))
+	fn, err := tracer.InitJaegerExporter("Transfer Me It", os.Getenv("COLLECTOR_HOSTNAME"))
+	if err != nil {
+		panic(err)
+	}
 	defer fn()
 
 	// connect to db
+	time.Sleep(2 * time.Second)
 	dbConn, err := conn.DbConn(os.Getenv("DB_HOST") + "?parseTime=true&loc=" + time.Local.String())
 	if err != nil {
 		panic(err)
@@ -120,8 +123,7 @@ func main() {
 	r.HandleFunc("/health", func(writer http.ResponseWriter, request *http.Request) {})
 	r.HandleFunc("/live", s.LiveHandler)
 	r.HandleFunc("/trace", func(w http.ResponseWriter, r *http.Request) {
-		span := trace.SpanFromContext(r.Context())
-		span.SetName("wahoo baby 3")
+		span := tracer.GetSpan(r, "child-span")
 		_, _ = w.Write([]byte(fmt.Sprintf("%v", r.Header)))
 		span.End()
 	})

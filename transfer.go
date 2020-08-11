@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	tminio "github.com/maxisme/transfermeit-backend/tracer/minio"
 	"github.com/minio/minio-go/v7"
 	log "github.com/sirupsen/logrus"
+	"net/http"
 	"time"
 )
 
@@ -72,7 +74,6 @@ func (transfer Transfer) InitialStore(db *sql.DB) (int64, error) {
 
 // Store stores the full information of the transfer based on the ID from InitialStore
 func (transfer Transfer) Store(db *sql.DB) error {
-	log.Info(transfer.expiry)
 	return UpdateErr(db.Exec(`
 	UPDATE transfer 
 	SET size=?, object_name=?, password=?, expiry_dttm=?, updated_dttm=NOW()
@@ -91,7 +92,7 @@ func KeepAliveTransfer(db *sql.DB, user User, path string) error {
 }
 
 // Completed will mark a transfer as completed and return the state back to the user over socket message.
-func (transfer Transfer) Completed(s *Server, failed bool, expired bool) error {
+func (transfer Transfer) Completed(r *http.Request, s *Server, failed bool, expired bool) error {
 	err := UpdateErr(s.db.Exec(`
 	UPDATE transfer 
 	SET object_name = NULL, finished_dttm = NOW(), password = NULL, failed = ?
@@ -102,7 +103,8 @@ func (transfer Transfer) Completed(s *Server, failed bool, expired bool) error {
 		return err
 	}
 
-	err = s.minio.RemoveObject(context.Background(), bucketName, transfer.ObjectName, minio.RemoveObjectOptions{})
+	err = tminio.RemoveObject(r, s.minio, context.Background(), bucketName, transfer.ObjectName,
+		minio.RemoveObjectOptions{})
 	if err != nil {
 		return err
 	}
@@ -120,7 +122,7 @@ func (transfer Transfer) Completed(s *Server, failed bool, expired bool) error {
 
 		// send user stats update to sender
 		fromUser := User{UUID: transfer.from.UUID}
-		fromUser.SetStats(s.db)
+		fromUser.Stats(r, s.db)
 
 		if err := s.funnels.Send(s.redis, transfer.from.UUID, SocketMessage{
 			User: &fromUser,
@@ -170,13 +172,13 @@ func (s *Server) CleanExpiredTransfers() error {
 		if err != nil {
 			return err
 		}
-		go transfer.Completed(s, true, true)
+		go transfer.Completed(nil, s, true, true)
 		cnt += 1
 	}
 	rows.Close()
 
 	if cnt > 0 {
-		log.Info(fmt.Sprintf("Deleted %d transfers", cnt))
+		Log(nil, log.InfoLevel, fmt.Sprintf("Deleted %d transfers", cnt))
 	}
 	return nil
 }

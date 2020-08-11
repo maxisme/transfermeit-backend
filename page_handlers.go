@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"github.com/go-sql-driver/mysql"
+	tdb "github.com/maxisme/transfermeit-backend/tracer/db"
 	"github.com/patrickmn/go-cache"
 	"html/template"
 
@@ -32,14 +33,14 @@ type liveContent struct {
 	Users   []displayUser
 }
 
-func getAllDisplayTransfers(db *sql.DB) ([]displayTransfer, error) {
+func getAllDisplayTransfers(r *http.Request, db *sql.DB) ([]displayTransfer, error) {
 	var transfers []displayTransfer
 	if u, found := c.Get("transfers"); found {
 		transfers = u.([]displayTransfer)
 	} else {
-		log.Info("Refreshed transfer cache")
+		Log(r, log.InfoLevel, "Refreshed transfer cache")
 		// fetch transfers from db if not in cache
-		rows, err := db.Query(`
+		rows, err := tdb.Query(r, db, `
 		SELECT from_UUID, to_UUID, expiry_dttm, size, failed, updated_dttm, finished_dttm
 		FROM transfer`)
 		if err != nil {
@@ -79,14 +80,14 @@ func (s *Server) LiveHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl := template.Must(template.ParseFiles(tmplPath))
 
 	// get users
-	users, err := getAllDisplayUsers(s.db)
+	users, err := getAllDisplayUsers(r, s.db)
 	if err != nil {
 		WriteError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	// get uploads
-	uploads, err := getAllDisplayTransfers(s.db)
+	uploads, err := getAllDisplayTransfers(r, s.db)
 	if err != nil {
 		WriteError(w, r, http.StatusBadRequest, err.Error())
 		return

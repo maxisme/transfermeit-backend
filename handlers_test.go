@@ -310,7 +310,7 @@ func TestUUIDReset(t *testing.T) {
 }
 
 func TestCustomCode(t *testing.T) {
-	var customCode = GenCode(s.db)
+	var customCode = GenCode(nil, s.db)
 	var user User
 
 	_, form := genCreditUser(customCodeCreditAmt)

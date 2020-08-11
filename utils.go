@@ -10,7 +10,6 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/gorilla/sessions"
 	log "github.com/sirupsen/logrus"
-
 	"runtime"
 
 	"math"
@@ -52,7 +51,7 @@ func UpdateErr(res sql.Result, err error) error {
 }
 
 // GenCode creates a random capitalized string of CodeLen and verifies it doesn't already exist
-func GenCode(db *sql.DB) string {
+func GenCode(r *http.Request, db *sql.DB) string {
 	var letters = []rune("ABCDEFGHJKMNPQRSTUVWXYZ23456789")
 
 	for {
@@ -61,7 +60,7 @@ func GenCode(db *sql.DB) string {
 			b[i] = letters[rand.Intn(len(letters))]
 		}
 		code := string(b)
-		if !codeExists(db, code) {
+		if !codeExists(r, db, code) {
 			return code
 		}
 	}
@@ -206,10 +205,3 @@ func LogWithSkip(r *http.Request, level log.Level, skip int, args ...interface{}
 		}
 	}
 }
-
-//func Exec(r *http.Request, db *sql.DB, query string, args ...interface{}) {
-//
-//	ctx, span = tracer.Start(ctx, "Sub operation...")
-//	defer span.End()
-//	db.Exec(query, args...)
-//}

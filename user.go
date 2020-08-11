@@ -2,8 +2,10 @@ package main
 
 import (
 	"database/sql"
+	tdb "github.com/maxisme/transfermeit-backend/tracer/db"
 	"github.com/patrickmn/go-cache"
 	log "github.com/sirupsen/logrus"
+	"net/http"
 	"time"
 )
 
@@ -42,32 +44,32 @@ type User struct {
 }
 
 // Store stores the permanent parts of the User struct in the database
-func (user User) Store(db *sql.DB) error {
-	_, err := db.Exec(`
+func (user User) Store(r *http.Request, db *sql.DB) error {
+	_, err := tdb.Exec(r, db, `
 	INSERT INTO user (code, UUID, UUID_key, public_key, code_end_dttm, registered_dttm)
 	VALUES (?, ?, ?, ?, ?, NOW())`, user.Code, Hash(user.UUID), Hash(user.UUIDKey), user.PublicKey, user.Expiry)
 	return err
 }
 
 // Update updates the permanent parts of the User struct in the database
-func (user User) Update(db *sql.DB) error {
-	return UpdateErr(db.Exec(`
+func (user User) Update(r *http.Request, db *sql.DB) error {
+	return UpdateErr(tdb.Exec(r, db, `
 	UPDATE user 
 	SET code = ?, public_key = ?, wanted_mins = ?, code_end_dttm = ?
 	WHERE UUID=?`, user.Code, user.PublicKey, user.WantedMins, user.Expiry, Hash(user.UUID)))
 }
 
 // UpdateUUIDKey updates the UUID Key of a user
-func (user User) UpdateUUIDKey(db *sql.DB) error {
-	return UpdateErr(db.Exec(`
+func (user User) UpdateUUIDKey(r *http.Request, db *sql.DB) error {
+	return UpdateErr(tdb.Exec(r, db, `
 	UPDATE user 
 	SET UUID_key = ?
 	WHERE UUID=?`, Hash(user.UUIDKey), Hash(user.UUID)))
 }
 
 // GetTier fetches the user tier level
-func (user *User) GetTier(db *sql.DB) {
-	user.SetCredit(db)
+func (user *User) GetTier(r *http.Request, db *sql.DB) {
+	user.SetCredit(r, db)
 	user.Tier = freeUserTier
 	if user.Credit >= customCodeCreditAmt {
 		user.Tier = customCodeUserTier
@@ -79,8 +81,8 @@ func (user *User) GetTier(db *sql.DB) {
 }
 
 // GetMinsAllowed gets the max minutes of account life the user can have
-func (user *User) GetMinsAllowed(db *sql.DB) {
-	user.GetTier(db)
+func (user *User) GetMinsAllowed(r *http.Request, db *sql.DB) {
+	user.GetTier(r, db)
 	if user.Tier == customCodeUserTier {
 		user.MinsAllowed = 60
 	} else if user.Tier == permUserTier {
@@ -92,24 +94,24 @@ func (user *User) GetMinsAllowed(db *sql.DB) {
 	}
 }
 
-// SetStats fetches all stored stats of a user
-func (user *User) SetStats(db *sql.DB) {
+// Stats fetches all stored stats of a user
+func (user *User) Stats(r *http.Request, db *sql.DB) {
 	// get code time left
-	user.GetExpiry(db)
+	user.GetExpiry(r, db)
 	if user.Expiry.Sub(time.Now()) <= 0 {
 		// user has expired
-		go purgeCode(db, *user)
+		go purgeCode(r, db, *user)
 	}
 
-	user.GetMinsAllowed(db)
-	user.GetTier(db)
-	user.GetBandwidthLeft(db)
-	user.GetMaxFileSize(db)
+	user.GetMinsAllowed(r, db)
+	user.GetTier(r, db)
+	user.GetBandwidthLeft(r, db)
+	user.GetMaxFileSize(r, db)
 }
 
 // SetWantedMins sets the WantedMins as long as the request is legitimate
-func (user *User) SetWantedMins(db *sql.DB, wantedMins int) {
-	user.GetMinsAllowed(db)
+func (user *User) SetWantedMins(r *http.Request, db *sql.DB, wantedMins int) {
+	user.GetMinsAllowed(r, db)
 	if wantedMins <= 0 || wantedMins%5 != 0 || wantedMins > maxAccountLifeMins || wantedMins > user.MinsAllowed {
 		user.WantedMins = defaultAccountLifeMins
 	} else {
@@ -118,7 +120,7 @@ func (user *User) SetWantedMins(db *sql.DB, wantedMins int) {
 }
 
 // GetUUIDKey will get the UUID_key of a user as well as verifying whether the user exists
-func (user User) GetUUIDKey(db *sql.DB) (string, bool) {
+func (user User) GetUUIDKey(r *http.Request, db *sql.DB) (string, bool) {
 	var id int
 	var key string
 
@@ -133,12 +135,12 @@ func (user User) GetUUIDKey(db *sql.DB) (string, bool) {
 	return key, false
 }
 
-func (user *User) SetCredit(db *sql.DB) error {
+func (user *User) SetCredit(r *http.Request, db *sql.DB) error {
 	if user.Credit > 0 {
 		// already set the users credit so don't bother trying again
 		return nil
 	}
-	credit, err := GetCredit(db, *user)
+	credit, err := GetCredit(r, db, *user)
 	if err != nil {
 		return err
 	}
@@ -151,22 +153,22 @@ func (user *User) SetCredit(db *sql.DB) error {
 }
 
 // GetBandwidthLeft fetches the amount of bandwidth the user has left for today
-func (user *User) GetBandwidthLeft(db *sql.DB) {
-	user.SetCredit(db)
-	usedBandwidth := getUserUsedBandwidth(db, *user)
+func (user *User) GetBandwidthLeft(r *http.Request, db *sql.DB) {
+	user.SetCredit(r, db)
+	usedBandwidth := getUserUsedBandwidth(r, db, *user)
 	creditedBandwidth := CreditToBandwidth(user.Credit)
 	user.BandwidthLeft = creditedBandwidth - usedBandwidth
 }
 
 // GetMaxFileSize fetches the maximum file size a user can upload with
-func (user *User) GetMaxFileSize(db *sql.DB) {
-	user.SetCredit(db)
+func (user *User) GetMaxFileSize(r *http.Request, db *sql.DB) {
+	user.SetCredit(r, db)
 	user.MaxFileSize = CreditToFileUploadSize(user.Credit)
 }
 
 // GetExpiry fetches the expiry date of the current code
-func (user *User) GetExpiry(db *sql.DB) {
-	result := db.QueryRow(`SELECT code_end_dttm
+func (user *User) GetExpiry(r *http.Request, db *sql.DB) {
+	result := tdb.QueryRow(r, db, `SELECT code_end_dttm
 	FROM user
 	WHERE UUID = ?`, Hash(user.UUID))
 	err := result.Scan(&user.Expiry)
@@ -176,10 +178,10 @@ func (user *User) GetExpiry(db *sql.DB) {
 }
 
 // IsValid returns true if user User has valid credentials else false
-func (user User) IsValid(db *sql.DB) bool {
+func (user User) IsValid(r *http.Request, db *sql.DB) bool {
 	if IsValidUUID(user.UUID) {
 		var id int64
-		result := db.QueryRow(`SELECT id
+		result := tdb.QueryRow(r, db, `SELECT id
         FROM user
         WHERE UUID = ? AND UUID_key = ?`, Hash(user.UUID), Hash(user.UUIDKey))
 		err := result.Scan(&id)
@@ -191,22 +193,22 @@ func (user User) IsValid(db *sql.DB) bool {
 }
 
 // GetWantedMins fetches the amount of minutes the user wants their code to last for
-func (user *User) GetWantedMins(db *sql.DB) error {
-	result := db.QueryRow(`SELECT wanted_mins
+func (user *User) GetWantedMins(r *http.Request, db *sql.DB) error {
+	result := tdb.QueryRow(r, db, `SELECT wanted_mins
 	FROM user
 	WHERE UUID = ?`, Hash(user.UUID))
 	return result.Scan(&user.WantedMins)
 }
 
-func getAllDisplayUsers(db *sql.DB) ([]displayUser, error) {
+func getAllDisplayUsers(r *http.Request, db *sql.DB) ([]displayUser, error) {
 	var users []displayUser
 	u, found := c.Get("users")
 	if found {
 		users = u.([]displayUser)
 	} else {
-		log.Info("Refreshed user cache")
+		Log(r, log.InfoLevel, "Refreshed user cache")
 		// fetch users from db if not in cache
-		rows, err := db.Query(`SELECT UUID, public_key, is_connected FROM user`)
+		rows, err := tdb.Query(r, db, `SELECT UUID, public_key, is_connected FROM user`)
 		if err != nil {
 			return nil, err
 		}
@@ -226,11 +228,11 @@ func getAllDisplayUsers(db *sql.DB) ([]displayUser, error) {
 }
 
 // CodeToUser converts a users code to a User.
-func CodeToUser(db *sql.DB, code string) (user User, err error) {
+func CodeToUser(r *http.Request, db *sql.DB, code string) (user User, err error) {
 	if len(code) != codeLen {
 		return
 	}
-	result := db.QueryRow(`SELECT UUID, public_key
+	result := tdb.QueryRow(r, db, `SELECT UUID, public_key
 	FROM user
 	WHERE code = ?
 	AND code_end_dttm >= NOW()`, code)
@@ -239,8 +241,8 @@ func CodeToUser(db *sql.DB, code string) (user User, err error) {
 }
 
 // SetUsersPermCode sets the users perm code as long as it matches what they have passed
-func SetUsersPermCode(db *sql.DB, user *User, expectedPermCode string) error {
-	permCode, customCode, err := GetUserPermCode(db, *user)
+func SetUsersPermCode(r *http.Request, db *sql.DB, user *User, expectedPermCode string) error {
+	permCode, customCode, err := GetUserPermCode(r, db, *user)
 	if err != nil {
 		return err
 	}
@@ -257,34 +259,34 @@ func SetUsersPermCode(db *sql.DB, user *User, expectedPermCode string) error {
 }
 
 // IsConnected will store if a user is connected to socket depending on `connected`
-func (user User) IsConnected(db *sql.DB, connected bool) error {
+func (user User) IsConnected(r *http.Request, db *sql.DB, connected bool) error {
 	isConnected := 1
 	if !connected {
 		isConnected = 0
 	}
 
-	return UpdateErr(db.Exec(`UPDATE user
+	return UpdateErr(tdb.Exec(r, db, `UPDATE user
 	SET is_connected = ?
 	WHERE UUID = ?`, isConnected, Hash(user.UUID)))
 }
 
-func purgeCode(db *sql.DB, user User) {
-	_ = UpdateErr(db.Exec(`UPDATE user
+func purgeCode(r *http.Request, db *sql.DB, user User) {
+	_ = UpdateErr(tdb.Exec(r, db, `UPDATE user
 	SET code = NULL, code_end_dttm = NULL
 	WHERE UUID = ? AND UUID_key = ?`, user.UUID, user.UUIDKey))
 }
 
-func codeExists(db *sql.DB, code string) bool {
+func codeExists(r *http.Request, db *sql.DB, code string) bool {
 	var id int
-	result := db.QueryRow(`SELECT id
+	result := tdb.QueryRow(r, db, `SELECT id
 	FROM user
 	WHERE code = ?`, code)
 	err := result.Scan(&id)
 	return err == nil && id > 0
 }
 
-func getUserUsedBandwidth(db *sql.DB, user User) (bytes int64) {
-	result := db.QueryRow(`SELECT SUM(size) as used_bandwidth
+func getUserUsedBandwidth(r *http.Request, db *sql.DB, user User) (bytes int64) {
+	result := tdb.QueryRow(r, db, `SELECT SUM(size) as used_bandwidth
 	FROM transfer
 	WHERE from_UUID = ? 
 	AND DATE(finished_dttm) = CURDATE()`, Hash(user.UUID))

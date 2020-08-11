@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/gorilla/websocket"
+	tminio "github.com/maxisme/transfermeit-backend/tracer/minio"
 	"github.com/minio/minio-go/v7"
 	log "github.com/sirupsen/logrus"
 
@@ -52,29 +53,29 @@ func (s *Server) TogglePermCodeHandler(w http.ResponseWriter, r *http.Request) {
 		UUIDKey: r.Form.Get("UUID_key"),
 	}
 
-	if !user.IsValid(s.db) {
+	if !user.IsValid(r, s.db) {
 		Log(r, log.ErrorLevel, "Invalid credentials")
 		WriteError(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
-	user.GetTier(s.db)
+	user.GetTier(r, s.db)
 	if user.Tier >= permUserTier {
-		permCode, customCode, err := GetUserPermCode(s.db, user)
+		permCode, customCode, err := GetUserPermCode(r, s.db, user)
 		if err != nil {
 			WriteError(w, r, http.StatusBadRequest, err.Error())
 			return
 		}
 		if permCode.Valid || customCode.Valid {
 			// remove any stored codes (INCLUDING custom code) as they already have one or the other
-			if err := RemovePermCodes(s.db, user); err != nil {
+			if err := RemovePermCodes(r, s.db, user); err != nil {
 				WriteError(w, r, http.StatusInternalServerError, err.Error())
 				return
 			}
 		} else {
 			// turn on random perm code
-			user.Code = GenCode(s.db)
-			if err := SetPermCode(s.db, user); err != nil {
+			user.Code = GenCode(r, s.db)
+			if err := SetPermCode(r, s.db, user); err != nil {
 				WriteError(w, r, http.StatusInternalServerError, "Failed to set permanent code")
 				return
 			}
@@ -102,7 +103,7 @@ func (s *Server) CustomCodeHandler(w http.ResponseWriter, r *http.Request) {
 		UUIDKey: r.Form.Get("UUID_key"),
 	}
 
-	if !user.IsValid(s.db) {
+	if !user.IsValid(r, s.db) {
 		WriteError(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
@@ -113,9 +114,9 @@ func (s *Server) CustomCodeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user.GetTier(s.db)
+	user.GetTier(r, s.db)
 	if user.Tier >= customCodeUserTier {
-		err := SetCustomCode(s.db, user)
+		err := SetCustomCode(r, s.db, user)
 		if err == nil {
 			if err := WriteJSON(w, user); err != nil {
 				WriteError(w, r, http.StatusInternalServerError, err.Error())
@@ -148,14 +149,14 @@ func (s *Server) RegisterCreditHandler(w http.ResponseWriter, r *http.Request) {
 		UUIDKey: r.Form.Get("UUID_key"),
 	}
 
-	if !user.IsValid(s.db) {
+	if !user.IsValid(r, s.db) {
 		WriteError(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
 	creditCode := r.Form.Get("credit_code")
 	if len(creditCode) == CreditCodeLen {
-		if err := SetCreditCode(s.db, user, creditCode); err != nil {
+		if err := SetCreditCode(r, s.db, user, creditCode); err != nil {
 			WriteError(w, r, http.StatusInternalServerError, "Failed to register credit")
 			return
 		}
@@ -199,12 +200,12 @@ func (s *Server) CreateCodeHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		wantedMins = defaultAccountLifeMins
 	}
-	user.SetWantedMins(s.db, wantedMins)
+	user.SetWantedMins(r, s.db, wantedMins)
 
-	user.Code = GenCode(s.db)
-	UUIDKey, userExists := user.GetUUIDKey(s.db)
+	user.Code = GenCode(r, s.db)
+	UUIDKey, userExists := user.GetUUIDKey(r, s.db)
 
-	if userExists && len(UUIDKey) > 0 && !user.IsValid(s.db) {
+	if userExists && len(UUIDKey) > 0 && !user.IsValid(r, s.db) {
 		WriteError(w, r, 402, "Invalid UUID key. Ask hello@transferme.it to reset")
 		return
 	} else if !userExists {
@@ -216,14 +217,14 @@ func (s *Server) CreateCodeHandler(w http.ResponseWriter, r *http.Request) {
 		user.MinsAllowed = defaultAccountLifeMins
 		user.WantedMins = defaultAccountLifeMins
 		user.Expiry = time.Now().Add(time.Minute * time.Duration(defaultAccountLifeMins)).UTC()
-		go user.Store(s.db)
+		go user.Store(r, s.db)
 	} else {
 		if len(UUIDKey) == 0 {
 			// if key has been removed from db because of lost UUID key from client
 			Log(r, log.InfoLevel, fmt.Sprintf("Resetting UUID key for: %s", user.UUID))
 
 			user.UUIDKey = RandomString(keyUUIDLen)
-			go user.UpdateUUIDKey(s.db)
+			go user.UpdateUUIDKey(r, s.db)
 		} else {
 			user.UUIDKey = ""
 		}
@@ -231,11 +232,11 @@ func (s *Server) CreateCodeHandler(w http.ResponseWriter, r *http.Request) {
 		// set perm code at client request
 		expectedPermCode := r.Form.Get("perm_user_code")
 		if len(expectedPermCode) != 0 {
-			SetUsersPermCode(s.db, &user, expectedPermCode)
+			SetUsersPermCode(r, s.db, &user, expectedPermCode)
 		}
 
 		user.Expiry = time.Now().Add(time.Minute * time.Duration(user.WantedMins)).UTC()
-		go user.Update(s.db)
+		go user.Update(r, s.db)
 	}
 
 	_ = WriteJSON(w, user)
@@ -260,7 +261,7 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 		UUIDKey: r.Form.Get("UUID_key"),
 	}
 
-	if !user.IsValid(s.db) {
+	if !user.IsValid(r, s.db) {
 		WriteError(w, r, http.StatusBadRequest, "Invalid method")
 		return
 	}
@@ -272,7 +273,7 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	code := r.Form.Get("code")
-	friend, err := CodeToUser(s.db, code)
+	friend, err := CodeToUser(r, s.db, code)
 	if err != nil {
 		WriteError(w, r, InvalidFriendErrorCode, err.Error())
 		return
@@ -287,15 +288,15 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user.GetWantedMins(s.db)
+	user.GetWantedMins(r, s.db)
 
-	user.GetBandwidthLeft(s.db)
+	user.GetBandwidthLeft(r, s.db)
 	if user.BandwidthLeft-filesize < 0 {
 		WriteError(w, r, BandwidthLimitErrorCode, "This transfer exceeds today's bandwidth limit!")
 		return
 	}
 
-	user.GetMaxFileSize(s.db)
+	user.GetMaxFileSize(r, s.db)
 	if user.MaxFileSize-filesize < 0 {
 		Log(r, log.InfoLevel, fmt.Sprintf("transfer with %f difference", BytesToMegabytes(user.MaxFileSize-filesize)))
 		mb := BytesToMegabytes(user.MaxFileSize)
@@ -312,7 +313,7 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	if transfer.AlreadyToUser(s.db) {
 		// already uploading to friend so delete the currently in process transfer
-		if err := transfer.Completed(s, true, false); err != nil {
+		if err := transfer.Completed(r, s, true, false); err != nil {
 			WriteError(w, r, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -399,9 +400,10 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	// write file to minio
 	objectName := RandomString(userDirLen) + "_" + handler.Filename
-	_, err = s.minio.PutObject(context.Background(), bucketName, objectName, file, handler.Size, minio.PutObjectOptions{
-		ContentType: fileContentType,
-	})
+	_, err = tminio.PutObject(r, s.minio, context.Background(), bucketName, objectName, file, handler.Size,
+		minio.PutObjectOptions{
+			ContentType: fileContentType,
+		})
 	if err != nil {
 		WriteError(w, r, http.StatusInternalServerError, err.Error())
 		return
@@ -444,7 +446,7 @@ func (s *Server) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 		UUIDKey: r.Form.Get("UUID_key"),
 	}
 
-	if !user.IsValid(s.db) {
+	if !user.IsValid(r, s.db) {
 		WriteError(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
@@ -455,14 +457,17 @@ func (s *Server) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	obj, err := s.minio.GetObject(context.Background(), bucketName, objectName, minio.GetObjectOptions{})
+	obj, err := tminio.GetObject(r, s.minio, context.Background(), bucketName, objectName, minio.GetObjectOptions{})
 	if err != nil {
-		log.Fatalln(err)
+		WriteError(w, r, http.StatusBadRequest, err.Error())
 	}
 
 	fi, err := obj.Stat()
 	if err != nil {
 		WriteError(w, r, http.StatusBadRequest, err.Error())
+		return
+	} else if fi.Size == 0 {
+		WriteError(w, r, http.StatusBadRequest, "File has been deleted from server")
 		return
 	}
 
@@ -495,7 +500,7 @@ func (s *Server) CompletedDownloadHandler(w http.ResponseWriter, r *http.Request
 		UUIDKey: r.Form.Get("UUID_key"),
 	}
 
-	if !user.IsValid(s.db) {
+	if !user.IsValid(r, s.db) {
 		WriteError(w, r, http.StatusBadRequest, "Invalid user")
 		return
 	}
@@ -516,7 +521,7 @@ func (s *Server) CompletedDownloadHandler(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	if err := transfer.Completed(s, failedTransfer, false); err != nil {
+	if err := transfer.Completed(r, s, failedTransfer, false); err != nil {
 		WriteError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}

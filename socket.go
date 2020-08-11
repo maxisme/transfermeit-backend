@@ -47,7 +47,7 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 		UUIDKey: r.Header.Get("UUID-key"),
 	}
 
-	if !user.IsValid(s.db) {
+	if !user.IsValid(r, s.db) {
 		WriteError(w, r, http.StatusBadRequest, "Invalid credentials")
 		return
 	}
@@ -73,7 +73,7 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	s.funnels.Add(s.redis, funnel)
 
 	// mark user as connected in db
-	go user.IsConnected(s.db, true)
+	go user.IsConnected(r, s.db, true)
 
 	// incoming socket messages
 	for {
@@ -91,7 +91,7 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 					Log(r, log.ErrorLevel, err.Error())
 				}
 			} else if mess.Type == "stats" {
-				user.SetStats(s.db)
+				user.Stats(r, s.db)
 				if err := WSConn.WriteJSON(SocketMessage{
 					User: &user,
 				}); err != nil {
@@ -102,7 +102,7 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// mark user as disconnected
-	go user.IsConnected(s.db, false)
+	go user.IsConnected(r, s.db, false)
 
 	// remove client from clients
 	err = s.funnels.Remove(funnel)
