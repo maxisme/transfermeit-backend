@@ -21,7 +21,7 @@ services:
       - ./sql:/sql
     command: ["-path", "/sql", "-database", "mysql://transfermeit:transfermeit@tcp(127.0.0.1:3306)/transfermeit", "up"]
 
-  storage:
+  minio:
     image: minio/minio
     ports:
       - "127.0.0.1:9000:9000"
@@ -45,15 +45,15 @@ services:
       REDIS_HOST: "redis:6379"
       MINIO_ACCESS_KEY: FfizvUST5eqWY0jhAulGKcIdLOz09VyvfE5
       MINIO_SECRET_KEY: lhFC48WhyPqVPiQJvthIbdj22KnturqaayT
-      MINIO_ENDPOINT: "storage:9000"
+      MINIO_ENDPOINT: "minio:9000"
       COLLECTOR_HOSTNAME: jaeger:14268
     depends_on:
       - db
-      - storage
+      - minio
     links:
       - db
       - redis
-      - storage
+      - minio
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.transfermeit.rule=Host(`localhost`)"

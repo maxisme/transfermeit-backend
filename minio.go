@@ -26,7 +26,7 @@ func getMinioClient(endpoint, bucket, accessKeyID, secretAccessKey string) (*min
 		if err != nil && !exists {
 			return nil, err
 		} else if exists {
-			fmt.Printf("bucket %s already exists...\n", bucket)
+			fmt.Printf("bucket '%s' already exists...\n", bucket)
 		}
 	}
 	return minioClient, nil

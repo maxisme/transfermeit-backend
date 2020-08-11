@@ -68,12 +68,14 @@ func main() {
 	}
 	sentryMiddleware := sentryhttp.New(sentryhttp.Options{})
 
-	// start tracer
-	fn, err := tracer.InitJaegerExporter("Transfer Me It", os.Getenv("COLLECTOR_HOSTNAME"))
-	if err != nil {
-		panic(err)
+	if os.Getenv("COLLECTOR_HOSTNAME") != "" {
+		// start tracer
+		fn, err := tracer.InitJaegerExporter("Transfer Me It", os.Getenv("COLLECTOR_HOSTNAME"))
+		if err != nil {
+			panic(err)
+		}
+		defer fn()
 	}
-	defer fn()
 
 	// connect to db
 	time.Sleep(2 * time.Second)
