@@ -87,7 +87,7 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 			Log(r, log.ErrorLevel, err.Error())
 		} else {
 			if mess.Type == "keep-alive" {
-				if err := KeepAliveTransfer(s.db, user, mess.Content); err != nil {
+				if err := KeepAliveTransfer(r, s.db, user, mess.Content); err != nil {
 					Log(r, log.ErrorLevel, err.Error())
 				}
 			} else if mess.Type == "stats" {

@@ -5,44 +5,19 @@ jobs:
   test:
     name: Test with go version
     runs-on: ubuntu-latest
-#    services:
-#      mysql:
-#        image: mysql:5.7
-#        env:
-#          MYSQL_ROOT_PASSWORD: root
-#        ports:
-#          - 3306:3306
-#        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
-#      minio:
-#        image: minio/minio
-#        command: "server /data{1...4}"
-#        env:
-#          MINIO_ACCESS_KEY: FfizvUST5eqWY0jhAulGKcIdLOz09VyvfE5
-#          MINIO_SECRET_KEY: lhFC48WhyPqVPiQJvthIbdj22KnturqaayT
-#      redis:
-#        image: "redis:alpine"
-
     strategy:
       matrix:
         go: ['1.12', '1.13', '1.14']
     steps:
       - uses: actions/checkout@master
 
-      - name: Build the stack
+      - name: Build the test stack
         run: docker-compose -f docker-compose-test.yml up -d
 
       - name: Setup Go
         uses: actions/setup-go@v1
         with:
           go-version: ${{ matrix.go }}
-
-      - name: Fetch cached dependencies
-        uses: actions/cache@v1
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
 
       - name: Test
         env:

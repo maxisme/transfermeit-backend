@@ -104,10 +104,11 @@ func genUser() (user User, form url.Values) {
 	UUID, _ := uuid.NewRandom()
 	form.Set("UUID", UUID.String())
 	form.Set("public_key", testB64PubKey)
-	rr := postRequest(form, http.HandlerFunc(s.CreateCodeHandler))
+	rr := postRequest(form, s.CreateCodeHandler)
 	if err := json.Unmarshal(rr.Body.Bytes(), &user); err != nil {
 		log.Fatal(err)
 	}
+	user.UUID = UUID.String()
 	time.Sleep(time.Millisecond * time.Duration(10))
 	return
 }
@@ -138,7 +139,10 @@ func readSocketMessage(ws *websocket.Conn) (message SocketMessage) {
 		fmt.Printf("%v\n", err)
 		return
 	}
-	_ = json.Unmarshal(mess, &message)
+	err = json.Unmarshal(mess, &message)
+	if err != nil {
+		panic(err)
+	}
 	return
 }
 
@@ -147,7 +151,7 @@ func connectWSSHeader(wsheader http.Header) (*httptest.Server, *http.Response, *
 	ws, res, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http"), wsheader)
 	if err == nil {
 		// add ws read timeout
-		_ = ws.SetReadDeadline(time.Now().Add(5000 * time.Millisecond))
+		_ = ws.SetReadDeadline(time.Now().Add(1 * time.Second))
 	}
 	return server, res, ws, err
 }

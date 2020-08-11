@@ -311,7 +311,7 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 		Size: filesize,
 	}
 
-	if transfer.AlreadyToUser(s.db) {
+	if transfer.AlreadyToUser(r, s.db) {
 		// already uploading to friend so delete the currently in process transfer
 		if err := transfer.Completed(r, s, true, false); err != nil {
 			WriteError(w, r, http.StatusInternalServerError, err.Error())
@@ -319,7 +319,7 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	transfer.ID, err = transfer.InitialStore(s.db)
+	transfer.ID, err = transfer.InitialStore(r, s.db)
 	if err != nil {
 		WriteError(w, r, http.StatusInternalServerError, err.Error())
 		return
@@ -415,7 +415,7 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	transfer.expiry = time.Now().Add(time.Minute * time.Duration(sessionTransfer.from.WantedMins))
 	transfer.Size = handler.Size
 
-	if err := transfer.Store(s.db); err != nil {
+	if err := transfer.Store(r, s.db); err != nil {
 		WriteError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -452,7 +452,7 @@ func (s *Server) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	objectName := r.Form.Get("object_name")
-	if !AllowedToDownload(s.db, user, objectName) {
+	if !AllowedToDownload(r, s.db, user, objectName) {
 		WriteError(w, r, http.StatusBadRequest, "No such file at path!")
 		return
 	}
@@ -511,7 +511,7 @@ func (s *Server) CompletedDownloadHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	failedTransfer := false
-	if err := transfer.GetPasswordAndUUID(s.db); err != nil {
+	if err := transfer.GetPasswordAndUUID(r, s.db); err != nil {
 		failedTransfer = true
 		WriteError(w, r, http.StatusInternalServerError, err.Error())
 	} else {

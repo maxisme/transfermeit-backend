@@ -108,7 +108,7 @@ func main() {
 	// clean up cron
 	c := cron.New()
 	err = c.AddFunc("@every 1m", func() {
-		if err := s.CleanExpiredTransfers(); err != nil {
+		if err := s.CleanExpiredTransfers(nil); err != nil {
 			log.Error(err)
 		}
 	})

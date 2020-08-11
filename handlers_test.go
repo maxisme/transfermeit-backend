@@ -111,6 +111,8 @@ func TestUploadDownloadCycle(t *testing.T) {
 		PubSub: s.redis.Subscribe(user2.UUID),
 	}
 	s.funnels.Add(s.redis, funnel2)
+	defer s.funnels.Remove(funnel)
+	defer s.funnels.Remove(funnel2)
 
 	// UPLOAD
 	fileSize := MegabytesToBytes(10)
@@ -228,10 +230,34 @@ func TestTwoPendingTransfers(t *testing.T) {
 
 	m := readSocketMessage(user1Ws)
 	expected := "Cancelled Transfer"
-	log.Printf("%v", m)
 	if m.Message.Title != expected {
 		t.Errorf("expected: %s got %s", expected, m.Message.Title)
 	}
+}
+
+func TestSocket(t *testing.T) {
+	user1, form1 := genUser()
+	user2, form2 := genUser()
+	_, _, user1Ws, _ := connectWSS(user1, form1)
+	funnel := &ws.Funnel{
+		Key:    user1.UUID,
+		WSConn: user1Ws,
+		PubSub: s.redis.Subscribe(user1.UUID),
+	}
+	s.funnels.Add(s.redis, funnel)
+	_, _, user2Ws, _ := connectWSS(user2, form2)
+	funnel2 := &ws.Funnel{
+		Key:    user2.UUID,
+		WSConn: user2Ws,
+		PubSub: s.redis.Subscribe(user2.UUID),
+	}
+	s.funnels.Add(s.redis, funnel2)
+	defer s.funnels.Remove(funnel)
+	defer s.funnels.Remove(funnel2)
+
+	s.funnels.Send(s.redis, Hash(user1.UUID), SocketMessage{Message: &DesktopMessage{
+		"hi", "hey",
+	}})
 }
 
 func TestCodeTimeout(t *testing.T) {
