@@ -16,7 +16,7 @@ jobs:
       minio:
         image: minio/minio
         command: "server /data{1...4}"
-        environment:
+        env:
           MINIO_ACCESS_KEY: FfizvUST5eqWY0jhAulGKcIdLOz09VyvfE5
           MINIO_SECRET_KEY: lhFC48WhyPqVPiQJvthIbdj22KnturqaayT
       redis:
