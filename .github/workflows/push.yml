@@ -23,10 +23,7 @@ jobs:
         env:
           DB_HOST: root:root@tcp(db:3306)/transfermeit
           SERVER_KEY: QVcnKozlSUvRSPj0jqjya7vZJLrkKUvKIq0WkpKN
-          SESSION_KEY: rps2P8irs0mT5uCgicv8m5PMq9a6WyzbxL7HWeRK
           REDIS_HOST: "redis:6379"
-          MINIO_ACCESS_KEY: FfizvUST5eqWY0jhAulGKcIdLOz09VyvfE5
-          MINIO_SECRET_KEY: lhFC48WhyPqVPiQJvthIbdj22KnturqaayT
           MINIO_ENDPOINT: "minio:9000"
         run: go test ./... -v
   

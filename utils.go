@@ -8,20 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/getsentry/sentry-go"
-	"github.com/gorilla/sessions"
 	log "github.com/sirupsen/logrus"
-	"runtime"
-
 	"math"
 	"math/rand"
 	"net/http"
 	"os"
+	"runtime"
 	"strings"
-)
-
-var (
-	AppSession *sessions.Session
-	store      = sessions.NewCookieStore([]byte(os.Getenv("SESSION_KEY")))
 )
 
 // Handle handles errors and logs them to sentry
@@ -145,17 +138,6 @@ func WriteError(w http.ResponseWriter, r *http.Request, code int, message string
 	w.Write([]byte(message))
 }
 
-// InitSession initiates a http session
-func InitSession(r *http.Request) (*sessions.Session, error) {
-	if AppSession != nil {
-		// there already is a global session so use that
-		return AppSession, nil
-	}
-	session, err := store.Get(r, uploadSessionName)
-	AppSession = session // set global session
-	return session, err
-}
-
 // BytesToReadable converts bytes to a readable string (MB, GB, etc...)
 func BytesToReadable(bytes int64) string {
 	if bytes == 0 {
@@ -179,8 +161,10 @@ func Log(r *http.Request, level log.Level, args ...interface{}) {
 
 func LogWithSkip(r *http.Request, level log.Level, skip int, args ...interface{}) {
 	fields := log.Fields{}
-	if len(r.Header.Get("X-B3-Traceid")) > 0 {
-		fields["X-B3-Traceid"] = r.Header.Get("X-B3-Traceid")
+	if r != nil {
+		if len(r.Header.Get("X-B3-Traceid")) > 0 {
+			fields["X-B3-Traceid"] = r.Header.Get("X-B3-Traceid")
+		}
 	}
 	if len(os.Getenv("COMMIT_HASH")) > 0 {
 		fields["commit-hash"] = os.Getenv("COMMIT_HASH")[:7]

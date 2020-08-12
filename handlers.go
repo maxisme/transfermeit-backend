@@ -327,7 +327,7 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 	transfer.from.UUID = "" // for privacy remove the UUID
 
 	// store transfer information in SESSION to be picked up by UploadHandler
-	session, err := InitSession(r)
+	session, err := s.session.Get(r, uploadSessionName)
 	if err != nil {
 		WriteError(w, r, http.StatusInternalServerError, err.Error())
 		return
@@ -350,13 +350,13 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// get session transfer
-	session, err := InitSession(r)
+	session, err := s.session.Get(r, uploadSessionName)
 	if err != nil {
 		WriteError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
 	sessionTransfer := session.Values[uploadSessionName].(Transfer)
-	if sessionTransfer.ID == 0 {
+	if sessionTransfer.to.UUID == "" {
 		WriteError(w, r, http.StatusBadRequest, "Init transfer not run")
 		return
 	}
@@ -423,7 +423,7 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	// tell friend to download file
 	if err := s.funnels.Send(s.redis, transfer.to.UUID, SocketMessage{Download: &transfer}); err != nil {
 		// no websocket to forward message on to so store until reconnect
-		Log(r, log.WarnLevel, "friend is not online")
+		Log(r, log.InfoLevel, fmt.Sprintf("%s is not online", transfer.to.UUID))
 	}
 }
 

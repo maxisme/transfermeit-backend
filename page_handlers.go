@@ -47,7 +47,6 @@ func getAllDisplayTransfers(r *http.Request, db *sql.DB) ([]displayTransfer, err
 			return nil, err
 		}
 
-		defer rows.Close()
 		for rows.Next() {
 			var (
 				dt       displayTransfer
@@ -65,6 +64,7 @@ func getAllDisplayTransfers(r *http.Request, db *sql.DB) ([]displayTransfer, err
 			dt.FileSize = BytesToReadable(fileSize)
 			transfers = append(transfers, dt)
 		}
+		rows.Close()
 		c.Set("transfers", transfers, cache.DefaultExpiration)
 	}
 	return transfers, nil

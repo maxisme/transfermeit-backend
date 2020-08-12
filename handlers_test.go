@@ -69,7 +69,7 @@ func TestCredentialHandler(t *testing.T) {
 }
 
 func TestWSHandler(t *testing.T) {
-	user, form := genUser()
+	user, form := createUser()
 	time.Sleep(time.Millisecond * time.Duration(100))
 
 	wsheader := http.Header{}
@@ -95,8 +95,8 @@ func TestWSHandler(t *testing.T) {
 
 func TestUploadDownloadCycle(t *testing.T) {
 	// create two users
-	user1, form1 := genUser()
-	user2, form2 := genUser()
+	user1, form1 := createUser()
+	user2, form2 := createUser()
 	_, _, user1Ws, _ := connectWSS(user1, form1)
 	funnel := &ws.Funnel{
 		Key:    user1.UUID,
@@ -168,7 +168,7 @@ func TestUploadDownloadCycle(t *testing.T) {
 }
 
 func TestInvalidUploadFileSizeVariable(t *testing.T) {
-	user1, form1 := genUser()
+	user1, form1 := createUser()
 	form1.Set("UUID_key", user1.UUIDKey)
 	rr := postRequest(form1, s.InitUploadHandler)
 	if rr.Code != InvalidFileSizeErrorCode {
@@ -177,7 +177,7 @@ func TestInvalidUploadFileSizeVariable(t *testing.T) {
 }
 
 func TestUploadToNonExistingFriend(t *testing.T) {
-	user1, form1 := genUser()
+	user1, form1 := createUser()
 	form1.Set("UUID_key", user1.UUIDKey)
 	form1.Set("filesize", strconv.Itoa(123))
 	form1.Set("code", RandomString(codeLen))
@@ -188,7 +188,7 @@ func TestUploadToNonExistingFriend(t *testing.T) {
 }
 
 func TestInvalidSendUploadToSelf(t *testing.T) {
-	user1, form1 := genUser()
+	user1, form1 := createUser()
 	form1.Set("UUID_key", user1.UUIDKey)
 	form1.Set("filesize", strconv.Itoa(123))
 	form1.Set("code", user1.Code)
@@ -203,8 +203,8 @@ func TestExceedBandwidth(t *testing.T) {
 }
 
 func TestTooLargeUpload(t *testing.T) {
-	user1, form1 := genUser()
-	user2, _ := genUser()
+	user1, form1 := createUser()
+	user2, _ := createUser()
 	form1.Set("UUID_key", user1.UUIDKey)
 	form1.Set("filesize", strconv.Itoa(freeFileUploadBytes+1))
 	form1.Set("code", user2.Code)
@@ -215,8 +215,8 @@ func TestTooLargeUpload(t *testing.T) {
 }
 
 func TestTwoPendingTransfers(t *testing.T) {
-	user1, form1 := genUser()
-	user2, _ := genUser()
+	user1, form1 := createUser()
+	user2, _ := createUser()
 	_, _, user1Ws, _ := connectWSS(user1, form1)
 	funnel := &ws.Funnel{
 		Key:    user1.UUID,
@@ -235,33 +235,8 @@ func TestTwoPendingTransfers(t *testing.T) {
 	}
 }
 
-func TestSocket(t *testing.T) {
-	user1, form1 := genUser()
-	user2, form2 := genUser()
-	_, _, user1Ws, _ := connectWSS(user1, form1)
-	funnel := &ws.Funnel{
-		Key:    user1.UUID,
-		WSConn: user1Ws,
-		PubSub: s.redis.Subscribe(user1.UUID),
-	}
-	s.funnels.Add(s.redis, funnel)
-	_, _, user2Ws, _ := connectWSS(user2, form2)
-	funnel2 := &ws.Funnel{
-		Key:    user2.UUID,
-		WSConn: user2Ws,
-		PubSub: s.redis.Subscribe(user2.UUID),
-	}
-	s.funnels.Add(s.redis, funnel2)
-	defer s.funnels.Remove(funnel)
-	defer s.funnels.Remove(funnel2)
-
-	s.funnels.Send(s.redis, Hash(user1.UUID), SocketMessage{Message: &DesktopMessage{
-		"hi", "hey",
-	}})
-}
-
 func TestCodeTimeout(t *testing.T) {
-	user, form := genUser()
+	user, form := createUser()
 
 	const secondHang = 3
 	time.Sleep(time.Second * time.Duration(secondHang))
@@ -269,7 +244,7 @@ func TestCodeTimeout(t *testing.T) {
 	_, _, ws, _ := connectWSS(user, form)
 
 	// send stats socket message to acquire user info
-	socketMessage, _ := json.Marshal(IncomingSocketMessage{Type: "stats"})
+	socketMessage, _ := json.Marshal(ClientSocketMessage{Type: "stats"})
 	_ = ws.WriteMessage(websocket.TextMessage, socketMessage)
 
 	message := readSocketMessage(ws)
@@ -319,7 +294,7 @@ func TestPermCode(t *testing.T) {
 }
 
 func TestUUIDReset(t *testing.T) {
-	_, form := genUser()
+	_, form := createUser()
 
 	removeUUIDKey(form)
 

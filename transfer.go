@@ -75,21 +75,19 @@ func (transfer Transfer) InitialStore(r *http.Request, db *sql.DB) (int64, error
 
 // Store stores the full information of the transfer based on the ID from InitialStore
 func (transfer Transfer) Store(r *http.Request, db *sql.DB) error {
-	return UpdateErr(tdb.Exec(r, db, `
-	UPDATE transfer 
+	return UpdateErr(tdb.Exec(r, db, `UPDATE transfer 
 	SET size=?, object_name=?, password=?, expiry_dttm=?, updated_dttm=NOW()
 	WHERE id=?`, transfer.Size, transfer.ObjectName, transfer.password, transfer.expiry, transfer.ID))
 }
 
 // KeepAliveTransfer will update the updated_dttm of the transfer to prevent the cleanup CleanExpiredTransfers()
 // from executing while still downloading
-func KeepAliveTransfer(r *http.Request, db *sql.DB, user User, path string) error {
+func KeepAliveTransfer(r *http.Request, db *sql.DB, user User, objectName string) error {
 	return UpdateErr(tdb.Exec(r, db, `
 	UPDATE transfer 
 	SET updated_dttm=NOW()
 	WHERE object_name=?
-	AND to_UUID
-	OR from_UUID`, path, Hash(user.UUID), Hash(user.UUID)))
+	AND to_UUID = ?`, objectName, Hash(user.UUID)))
 }
 
 // Completed will mark a transfer as completed and return the state back to the user over socket message.
@@ -163,10 +161,9 @@ func (s *Server) CleanExpiredTransfers(r *http.Request) error {
 	rows, err := tdb.Query(r, s.db, `
 	SELECT id, object_name, to_UUID, from_UUID
 	FROM transfer
-	WHERE finished_dttm IS NULL
-	AND expiry_dttm IS NOT NULL
-	AND expiry_dttm < NOW()
-	AND (updated_dttm IS NULL OR updated_dttm + interval 1 minute > NOW())`)
+	WHERE finished_dttm IS NULL AND expiry_dttm IS NOT NULL
+  	AND ((expiry_dttm < NOW() AND updated_dttm IS NULL) 
+           OR (updated_dttm IS NOT NULL AND updated_dttm + interval 1 minute <= NOW()))`)
 	if err != nil {
 		return err
 	}
@@ -178,7 +175,9 @@ func (s *Server) CleanExpiredTransfers(r *http.Request) error {
 		if err != nil {
 			return err
 		}
-		go transfer.Completed(nil, s, true, true)
+		if err := transfer.Completed(r, s, true, true); err != nil {
+			return err
+		}
 		cnt += 1
 	}
 	rows.Close()

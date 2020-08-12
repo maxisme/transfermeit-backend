@@ -22,8 +22,8 @@ type SocketMessage struct {
 	Message  *DesktopMessage `json:"message"`
 }
 
-// IncomingSocketMessage structure
-type IncomingSocketMessage struct {
+// ClientSocketMessage structure
+type ClientSocketMessage struct {
 	Type    string `json:"type"`
 	Content string `json:"content"`
 }
@@ -82,20 +82,21 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-		var mess IncomingSocketMessage
+		var mess ClientSocketMessage
 		if err := json.Unmarshal(message, &mess); err != nil {
 			Log(r, log.ErrorLevel, err.Error())
 		} else {
 			if mess.Type == "keep-alive" {
-				if err := KeepAliveTransfer(r, s.db, user, mess.Content); err != nil {
-					Log(r, log.ErrorLevel, err.Error())
+				objectName := mess.Content
+				if err := KeepAliveTransfer(r, s.db, user, objectName); err != nil {
+					LogWithSkip(r, log.WarnLevel, 1, err.Error())
 				}
 			} else if mess.Type == "stats" {
 				user.Stats(r, s.db)
 				if err := WSConn.WriteJSON(SocketMessage{
 					User: &user,
 				}); err != nil {
-					Log(r, log.ErrorLevel, err.Error())
+					LogWithSkip(r, log.WarnLevel, 1, err.Error())
 				}
 			}
 		}
@@ -107,6 +108,6 @@ func (s *Server) WSHandler(w http.ResponseWriter, r *http.Request) {
 	// remove client from clients
 	err = s.funnels.Remove(funnel)
 	if err != nil {
-		Log(r, log.WarnLevel, err.Error())
+		LogWithSkip(r, log.ErrorLevel, 1, err.Error())
 	}
 }

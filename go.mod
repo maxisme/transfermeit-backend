@@ -7,6 +7,7 @@ require (
 	github.com/TV4/graceful v0.3.4
 	github.com/containerd/containerd v1.3.7 // indirect
 	github.com/didip/tollbooth v4.0.2+incompatible
+	github.com/garyburd/redigo v1.6.2 // indirect
 	github.com/getsentry/sentry-go v0.7.0
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-errors/errors v1.1.1 // indirect
@@ -38,7 +39,7 @@ require (
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/api v0.30.0 // indirect
 	google.golang.org/genproto v0.0.0-20200804151602-45615f50871c // indirect
-	google.golang.org/grpc v1.31.0 // indirect
+	gopkg.in/boj/redistore.v1 v1.0.0-20160128113310-fc113767cd6b
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
 )

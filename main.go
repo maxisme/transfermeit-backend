@@ -18,6 +18,7 @@ import (
 	"github.com/patrickmn/go-cache"
 	"github.com/robfig/cron"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/boj/redistore.v1"
 
 	"net/http"
 	"os"
@@ -53,6 +54,7 @@ type Server struct {
 	minio   *minio.Client
 	redis   *redis.Client
 	funnels *ws.Funnels
+	session *redistore.RediStore
 }
 
 func main() {
@@ -92,16 +94,23 @@ func main() {
 	}
 	defer redisConn.Close()
 
+	// create redis cookie store
+	redisStore, err := redistore.NewRediStore(30, "tcp", os.Getenv("REDIS_HOST"), "", []byte(os.Getenv("SESSION_KEY")))
+	if err != nil {
+		panic(err)
+	}
+
 	// connect to minio
 	minioClient, err := getMinioClient(os.Getenv("MINIO_ENDPOINT"), bucketName, os.Getenv("MINIO_ACCESS_KEY"), os.Getenv("MINIO_SECRET_KEY"))
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
 	s := Server{
 		db:      dbConn,
 		minio:   minioClient,
 		redis:   redisConn,
+		session: redisStore,
 		funnels: &ws.Funnels{Clients: make(map[string]*ws.Funnel), StoreOnFailure: true},
 	}
 

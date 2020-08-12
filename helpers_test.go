@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/maxisme/notifi-backend/conn"
 	"github.com/maxisme/notifi-backend/ws"
+	"gopkg.in/boj/redistore.v1"
 
 	"bytes"
 	"encoding/json"
@@ -82,9 +83,13 @@ func initDB(t *testing.M) {
 	redis, err := conn.RedisConn("127.0.0.1:6379")
 	if err != nil {
 		panic(err)
+	} // create redis cookie store
+	redisStore, err := redistore.NewRediStore(30, "tcp", "127.0.0.1:6379", "", []byte("rps2P8irs0mT5uCgicv8m5PMq9a6WyzbxL7HWeRK"))
+	if err != nil {
+		panic(err)
 	}
 
-	s = Server{db: db, minio: minio, redis: redis, funnels: &ws.Funnels{StoreOnFailure: true, Clients: make(map[string]*ws.Funnel)}}
+	s = Server{db: db, minio: minio, redis: redis, funnels: &ws.Funnels{StoreOnFailure: true, Clients: make(map[string]*ws.Funnel)}, session: redisStore}
 
 	code := t.Run() // RUN THE TEST
 
@@ -99,7 +104,7 @@ func postRequest(form url.Values, handler http.HandlerFunc) *httptest.ResponseRe
 	return rr
 }
 
-func genUser() (user User, form url.Values) {
+func createUser() (user User, form url.Values) {
 	form = url.Values{}
 	UUID, _ := uuid.NewRandom()
 	form.Set("UUID", UUID.String())
@@ -114,7 +119,7 @@ func genUser() (user User, form url.Values) {
 }
 
 func genCreditUser(credit float64) (user User, form url.Values) {
-	user, form = genUser()
+	user, form = createUser()
 
 	creditCode := RandomString(CreditCodeLen)
 	generateProCredit(creditCode, credit)
@@ -164,11 +169,28 @@ func generateProCredit(activationCode string, credit float64) {
 }
 
 func removeUUIDKey(form url.Values) {
-	UpdateErr(s.db.Exec(`
+	s.db.Exec(`
 	UPDATE user 
 	SET UUID_key=''
 	WHERE UUID = ?
-	`, Hash(form.Get("UUID"))))
+	`, Hash(form.Get("UUID")))
+}
+
+func markTransferAsExpired(toUUID string) {
+	s.db.Exec(`
+	UPDATE transfer 
+	SET updated_dttm = DATE_SUB(NOW(), INTERVAL 1 HOUR), expiry_dttm = DATE_SUB(NOW(), INTERVAL 10 MINUTE)
+	WHERE to_UUID = ?
+	`, Hash(toUUID))
+}
+
+func getTransferUpdateDttm(toUUID string) time.Time {
+	row := s.db.QueryRow(`
+	SELECT updated_dttm from transfer WHERE to_UUID = ?
+	`, Hash(toUUID))
+	var ts time.Time
+	row.Scan(&ts)
+	return ts
 }
 
 func upload(t *testing.T, user1 User, user2 User, form1 url.Values, fileSize int64) string {
