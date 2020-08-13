@@ -20,11 +20,6 @@ jobs:
           go-version: ${{ matrix.go }}
 
       - name: Test
-        env:
-          DB_HOST: root:root@tcp(db:3306)/transfermeit
-          SERVER_KEY: QVcnKozlSUvRSPj0jqjya7vZJLrkKUvKIq0WkpKN
-          REDIS_HOST: "redis:6379"
-          MINIO_ENDPOINT: "minio:9000"
         run: go test ./... -v
   
       - uses: codecov/codecov-action@v1
@@ -47,12 +42,21 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
           tag_with_ref: true
           tag_with_sha: true
-      - name: Update Swarm
+      - name: Update Swarm Master
         if: github.ref == 'refs/heads/master'
         run: |
           curl -f -X POST ${{ secrets.SWARM_HOOK }} \
           -H 'Content-Type: application/x-www-form-urlencoded' \
-          -d 'service=notifi-backend_app' \
+          -d 'service=transfermeit-backend_app' \
+          -d "repo=${{ github.repository }}" \
+          -d "sha=${{ github.sha }}" \
+          -d "token=${{ secrets.HOOK_TOKEN }}"
+      - name: Update Swarm Develop
+        if: github.ref == 'refs/heads/develop'
+        run: |
+          curl -f -X POST ${{ secrets.SWARM_HOOK }} \
+          -H 'Content-Type: application/x-www-form-urlencoded' \
+          -d 'service=dev.transfermeit-backend_app' \
           -d "repo=${{ github.repository }}" \
           -d "sha=${{ github.sha }}" \
           -d "token=${{ secrets.HOOK_TOKEN }}"

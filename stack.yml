@@ -1,14 +1,14 @@
 version: '3.8'
 services:
   app:
-    image: maxisme/transfermeit-backend:latest
+    image: maxisme/transfermeit-backend:${TAG:?err}
     env_file:
       - ".env"
     deploy:
       mode: global
       labels:
         - "traefik.enable=true"
-        - "traefik.http.routers.transfermeit-backend.rule=Host(`sock.transferme.it`)"
+        - "traefik.http.routers.transfermeit-backend.rule=Host(`${SUBDOM}sock.transferme.it`)"
         - "traefik.http.routers.transfermeit-backend.entrypoints=web-secure"
         - "traefik.http.routers.transfermeit-backend.tls.certresolver=letsencrypt"
         - "traefik.http.routers.transfermeit-backend.middlewares=404"
