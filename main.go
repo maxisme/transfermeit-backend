@@ -95,7 +95,7 @@ func main() {
 	defer redisConn.Close()
 
 	// create redis cookie store
-	redisStore, err := redistore.NewRediStore(30, "tcp", os.Getenv("REDIS_HOST"), "", []byte(os.Getenv("SESSION_KEY")))
+	redisStore, err := redistore.NewRediStore(10, "tcp", os.Getenv("REDIS_HOST"), "", []byte(os.Getenv("SESSION_KEY")))
 	if err != nil {
 		panic(err)
 	}

@@ -17,9 +17,9 @@ type DesktopMessage struct {
 
 // SocketMessage structure
 type SocketMessage struct {
-	User     *User           `json:"user"`
-	Download *Transfer       `json:"download"`
-	Message  *DesktopMessage `json:"message"`
+	User       *User           `json:"user"`
+	ObjectPath string          `json:"object-path"`
+	Message    *DesktopMessage `json:"message"`
 }
 
 // ClientSocketMessage structure

@@ -124,7 +124,7 @@ func TestUploadDownloadCycle(t *testing.T) {
 
 	message := readSocketMessage(funnel2.WSConn)
 	log.Printf("%v\n", message)
-	objectName := message.Download.ObjectName
+	objectName := message.ObjectPath
 	user2Ws.Close()
 
 	// download file at path

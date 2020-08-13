@@ -213,7 +213,7 @@ func upload(t *testing.T, user1 User, user2 User, form1 url.Values, fileSize int
 		t.Errorf("Got '%v' expected '%v'", initUploadR.Body, testB64PubKey)
 	}
 
-	// actual file upload handler
+	// file upload handler
 	password := RandomString(10)
 	uploadR := uploadFile(f, initUploadR.Header().Get("Set-Cookie"), password)
 	if uploadR.Code != 200 {

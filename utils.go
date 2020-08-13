@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/getsentry/sentry-go"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/boj/redistore.v1"
 	"math"
 	"math/rand"
 	"net/http"
@@ -188,4 +189,30 @@ func LogWithSkip(r *http.Request, level log.Level, skip int, args ...interface{}
 			})
 		}
 	}
+}
+
+func StoreSession(r *http.Request, w http.ResponseWriter, s *redistore.RediStore, name string, val interface{}) error {
+	session, err := s.Get(r, name)
+	if err != nil {
+		return err
+	}
+
+	jsonVal, err := json.Marshal(val)
+	if err != nil {
+		return err
+	}
+	session.Values[name] = jsonVal
+	if err := session.Save(r, w); err != nil {
+		return err
+	}
+	return nil
+}
+
+func GetSession(r *http.Request, s *redistore.RediStore, name string, val interface{}) (err error) {
+	session, err := s.Get(r, name)
+	if err != nil {
+		return
+	}
+	err = json.Unmarshal(session.Values[name].([]byte), &val)
+	return
 }

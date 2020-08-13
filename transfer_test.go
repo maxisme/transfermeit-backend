@@ -35,7 +35,7 @@ func TestCleanExpiredTransfers(t *testing.T) {
 	_ = upload(t, user1, user2, form1, fileSize)
 
 	message := readSocketMessage(funnel2.WSConn)
-	objectName := message.Download.ObjectName
+	objectName := message.ObjectPath
 	user2Ws.Close()
 
 	// delete expired transfers (there shouldn't be any)
@@ -96,7 +96,7 @@ func TestKeepAliveTransfer(t *testing.T) {
 
 	message := readSocketMessage(funnel2.WSConn)
 	time.Sleep(1 * time.Second)
-	socketMessage, _ := json.Marshal(ClientSocketMessage{Type: "keep-alive", Content: message.Download.ObjectName})
+	socketMessage, _ := json.Marshal(ClientSocketMessage{Type: "keep-alive", Content: message.ObjectPath})
 	_ = user2Ws.WriteMessage(websocket.TextMessage, socketMessage)
 	time.Sleep(50 * time.Millisecond) // needed to wait for socket message to be processed
 

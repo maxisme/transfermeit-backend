@@ -31,7 +31,7 @@ const (
 type User struct {
 	ID            int       `json:"-"`
 	PublicKey     string    `json:"-"`
-	UUID          string    `json:"-"`
+	UUID          string    `json:"uuid"`
 	Code          string    `json:"user_code"`
 	BandwidthLeft int64     `json:"bw_left"`
 	MaxFileSize   int64     `json:"max_fs"`

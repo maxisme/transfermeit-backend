@@ -7,7 +7,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"context"
-	"encoding/gob"
 	"fmt"
 	"io"
 	"net/http"
@@ -288,7 +287,10 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user.GetWantedMins(r, s.db)
+	if err := user.GetWantedMins(r, s.db); err != nil {
+		WriteError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
 
 	user.GetBandwidthLeft(r, s.db)
 	if user.BandwidthLeft-filesize < 0 {
@@ -306,8 +308,8 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	transfer := Transfer{
-		from: user,
-		to:   User{UUID: friend.UUID},
+		From: user,
+		To:   User{UUID: friend.UUID},
 		Size: filesize,
 	}
 
@@ -324,17 +326,10 @@ func (s *Server) InitUploadHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
-	transfer.from.UUID = "" // for privacy remove the UUID
+	transfer.From.UUID = "" // for privacy remove the UUID
 
 	// store transfer information in SESSION to be picked up by UploadHandler
-	session, err := s.session.Get(r, uploadSessionName)
-	if err != nil {
-		WriteError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
-	gob.Register(Transfer{})
-	session.Values[uploadSessionName] = transfer
-	if err := session.Save(r, w); err != nil {
+	if err := StoreSession(r, w, s.session, uploadSessionName, transfer); err != nil {
 		WriteError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -349,22 +344,14 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// get session transfer
-	session, err := s.session.Get(r, uploadSessionName)
-	if err != nil {
-		WriteError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
-	sessionTransfer := session.Values[uploadSessionName].(Transfer)
-	if sessionTransfer.to.UUID == "" {
-		WriteError(w, r, http.StatusBadRequest, "Init transfer not run")
+	var sessionTransfer Transfer
+	if err := GetSession(r, s.session, uploadSessionName, &sessionTransfer); err != nil {
+		WriteError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	// delete session
-	session.Values[uploadSessionName] = nil
-	if err := session.Save(r, w); err != nil {
-		WriteError(w, r, http.StatusInternalServerError, err.Error())
+	if sessionTransfer.To.UUID == "" {
+		WriteError(w, r, http.StatusBadRequest, "No upload cookie")
 		return
 	}
 
@@ -380,7 +367,7 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// get (encrypted with friends public key) password
-	sessionTransfer.password = r.Form.Get("password")
+	sessionTransfer.Password = r.Form.Get("password")
 
 	// get file from form
 	file, handler, err := r.FormFile("file")
@@ -412,7 +399,7 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	// write details into the transfer struct
 	transfer := sessionTransfer
 	transfer.ObjectName = objectName
-	transfer.expiry = time.Now().Add(time.Minute * time.Duration(sessionTransfer.from.WantedMins))
+	transfer.expiry = time.Now().Add(time.Minute * time.Duration(sessionTransfer.From.WantedMins))
 	transfer.Size = handler.Size
 
 	if err := transfer.Store(r, s.db); err != nil {
@@ -421,9 +408,9 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// tell friend to download file
-	if err := s.funnels.Send(s.redis, transfer.to.UUID, SocketMessage{Download: &transfer}); err != nil {
+	if err := s.funnels.Send(s.redis, Hash(Hash(transfer.To.UUID)), SocketMessage{ObjectPath: objectName}); err != nil {
 		// no websocket to forward message on to so store until reconnect
-		Log(r, log.InfoLevel, fmt.Sprintf("%s is not online", transfer.to.UUID))
+		Log(r, log.InfoLevel, fmt.Sprintf("%s is not online", transfer.To.UUID))
 	}
 }
 
@@ -506,7 +493,7 @@ func (s *Server) CompletedDownloadHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	var transfer = Transfer{
-		to:         User{UUID: user.UUID},
+		To:         User{UUID: user.UUID},
 		ObjectName: r.Form.Get("object_name"),
 	}
 
@@ -515,7 +502,7 @@ func (s *Server) CompletedDownloadHandler(w http.ResponseWriter, r *http.Request
 		failedTransfer = true
 		WriteError(w, r, http.StatusInternalServerError, err.Error())
 	} else {
-		if transfer.password == "" || transfer.from.UUID == "" {
+		if transfer.Password == "" || transfer.From.UUID == "" {
 			failedTransfer = true
 			WriteError(w, r, http.StatusInternalServerError, "No password for user")
 		}
@@ -526,6 +513,6 @@ func (s *Server) CompletedDownloadHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	_, err := w.Write([]byte(transfer.password))
+	_, err := w.Write([]byte(transfer.Password))
 	Log(r, log.ErrorLevel, err)
 }

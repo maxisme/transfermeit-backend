@@ -23,13 +23,12 @@ const (
 
 // Transfer structure
 type Transfer struct {
-	ID         int64     `json:"-"`
+	ID         int64     `json:"id"`
 	ObjectName string    `json:"object_name"`
 	Size       int64     `json:"file_size"`
-	from       User      `json:"-"`
-	to         User      `json:"-"`
-	hash       string    `json:"-"`
-	password   string    `json:"-"`
+	From       User      `json:"from"`
+	To         User      `json:"to"`
+	Password   string    `json:"password"`
 	expiry     time.Time `json:"-"`
 }
 
@@ -41,8 +40,8 @@ func (transfer *Transfer) GetPasswordAndUUID(r *http.Request, db *sql.DB) error 
 	FROM transfer
 	WHERE finished_dttm IS NULL
 	AND to_UUID = ?
-	AND object_name = ?`, Hash(transfer.to.UUID), transfer.ObjectName)
-	return result.Scan(&transfer.password, &transfer.from.UUID)
+	AND object_name = ?`, Hash(transfer.To.UUID), transfer.ObjectName)
+	return result.Scan(&transfer.Password, &transfer.From.UUID)
 }
 
 // AlreadyToUser returns true if already transferring between two users
@@ -53,7 +52,7 @@ func (transfer *Transfer) AlreadyToUser(r *http.Request, db *sql.DB) bool {
     FROM transfer
     WHERE from_UUID = ?
     AND to_UUID = ?
-    AND finished_dttm IS NULL`, Hash(transfer.from.UUID), Hash(transfer.to.UUID))
+    AND finished_dttm IS NULL`, Hash(transfer.From.UUID), Hash(transfer.To.UUID))
 	_ = result.Scan(&id)
 	return id > 0
 }
@@ -62,7 +61,7 @@ func (transfer *Transfer) AlreadyToUser(r *http.Request, db *sql.DB) bool {
 func (transfer Transfer) InitialStore(r *http.Request, db *sql.DB) (int64, error) {
 	res, err := tdb.Exec(r, db, `
 	INSERT into transfer (from_UUID, to_UUID)
-	VALUES (?, ?)`, Hash(transfer.from.UUID), Hash(transfer.to.UUID))
+	VALUES (?, ?)`, Hash(transfer.From.UUID), Hash(transfer.To.UUID))
 	if err != nil {
 		return 0, err
 	}
@@ -77,7 +76,7 @@ func (transfer Transfer) InitialStore(r *http.Request, db *sql.DB) (int64, error
 func (transfer Transfer) Store(r *http.Request, db *sql.DB) error {
 	return UpdateErr(tdb.Exec(r, db, `UPDATE transfer 
 	SET size=?, object_name=?, password=?, expiry_dttm=?, updated_dttm=NOW()
-	WHERE id=?`, transfer.Size, transfer.ObjectName, transfer.password, transfer.expiry, transfer.ID))
+	WHERE id=?`, transfer.Size, transfer.ObjectName, transfer.Password, transfer.expiry, transfer.ID))
 }
 
 // KeepAliveTransfer will update the updated_dttm of the transfer to prevent the cleanup CleanExpiredTransfers()
@@ -101,7 +100,7 @@ func (transfer Transfer) Completed(r *http.Request, s *Server, failed bool, expi
 	SET object_name = '', finished_dttm = NOW(), password = NULL, failed = ?
 	WHERE from_UUID = ?
 	AND to_UUID = ?
-	AND object_name = ?`, f, Hash(transfer.from.UUID), Hash(transfer.to.UUID), transfer.ObjectName))
+	AND object_name = ?`, f, Hash(transfer.From.UUID), Hash(transfer.To.UUID), transfer.ObjectName))
 	if err != nil {
 		return err
 	}
@@ -126,16 +125,16 @@ func (transfer Transfer) Completed(r *http.Request, s *Server, failed bool, expi
 		message.Message = "Your friend has received your file!"
 
 		// send user stats update to sender
-		fromUser := User{UUID: transfer.from.UUID}
+		fromUser := User{UUID: transfer.From.UUID}
 		fromUser.Stats(r, s.db)
-		if err := s.funnels.Send(s.redis, Hash(transfer.from.UUID), SocketMessage{
+		if err := s.funnels.Send(s.redis, Hash(transfer.From.UUID), SocketMessage{
 			User: &fromUser,
 		}); err != nil {
 			return err
 		}
 	}
 
-	return s.funnels.Send(s.redis, Hash(transfer.from.UUID), SocketMessage{Message: &message})
+	return s.funnels.Send(s.redis, Hash(transfer.From.UUID), SocketMessage{Message: &message})
 }
 
 // AllowedToDownload verifies that the download request is legitimate
@@ -171,7 +170,7 @@ func (s *Server) CleanExpiredTransfers(r *http.Request) error {
 	cnt := 0
 	for rows.Next() {
 		var transfer Transfer
-		err := rows.Scan(&transfer.ID, &transfer.ObjectName, &transfer.to.UUID, &transfer.from.UUID)
+		err := rows.Scan(&transfer.ID, &transfer.ObjectName, &transfer.To.UUID, &transfer.From.UUID)
 		if err != nil {
 			return err
 		}
