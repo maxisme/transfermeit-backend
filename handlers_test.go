@@ -7,7 +7,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/maxisme/notifi-backend/ws"
 	"github.com/minio/minio-go/v7"
-	"log"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -123,7 +122,6 @@ func TestUploadDownloadCycle(t *testing.T) {
 	// fetch initial message containing download file path that was sent when user was not connected to web socket
 
 	message := readSocketMessage(funnel2.WSConn)
-	log.Printf("%v\n", message)
 	objectName := message.ObjectPath
 	user2Ws.Close()
 
@@ -238,7 +236,7 @@ func TestTwoPendingTransfers(t *testing.T) {
 func TestCodeTimeout(t *testing.T) {
 	user, form := createUser()
 
-	const secondHang = 3
+	const secondHang = 1
 	time.Sleep(time.Second * time.Duration(secondHang))
 
 	_, _, ws, _ := connectWSS(user, form)

@@ -107,6 +107,18 @@ func TestKeepAliveTransfer(t *testing.T) {
 	}
 }
 
-func LieAboutTransferSize(t *testing.T) {
+func TestInvalidTransferSize(t *testing.T) {
+
+}
+
+func TestNoUploadCookie(t *testing.T) {
+
+}
+
+func TestTransferToOfflineFriend(t *testing.T) {
+
+}
+
+func TestDeleteFileMidTransfer(t *testing.T) {
 
 }

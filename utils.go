@@ -18,19 +18,6 @@ import (
 	"strings"
 )
 
-// Handle handles errors and logs them to sentry
-//func Handle(err error) {
-//	if err != nil {
-//		pc, _, ln, _ := runtime.Caller(1)
-//		details := runtime.FuncForPC(pc)
-//		log.Printf("Fatal: %s - %s %d", err.Error(), details.Name(), ln)
-//
-//		// log to sentry
-//		sentry.CaptureException(err)
-//		sentry.Flush(time.Second * 5)
-//	}
-//}
-
 // UpdateErr returns an error if no rows have been effected
 func UpdateErr(res sql.Result, err error) error {
 	if err != nil {
@@ -136,7 +123,6 @@ func WriteError(w http.ResponseWriter, r *http.Request, code int, message string
 	LogWithSkip(r, log.ErrorLevel, 2, message)
 
 	http.Error(w, message, code)
-	w.Write([]byte(message))
 }
 
 // BytesToReadable converts bytes to a readable string (MB, GB, etc...)

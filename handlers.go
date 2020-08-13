@@ -216,14 +216,20 @@ func (s *Server) CreateCodeHandler(w http.ResponseWriter, r *http.Request) {
 		user.MinsAllowed = defaultAccountLifeMins
 		user.WantedMins = defaultAccountLifeMins
 		user.Expiry = time.Now().Add(time.Minute * time.Duration(defaultAccountLifeMins)).UTC()
-		go user.Store(r, s.db)
+		if err := user.Store(r, s.db); err != nil {
+			WriteError(w, r, http.StatusInternalServerError, err.Error())
+			return
+		}
 	} else {
 		if len(UUIDKey) == 0 {
 			// if key has been removed from db because of lost UUID key from client
 			Log(r, log.InfoLevel, fmt.Sprintf("Resetting UUID key for: %s", user.UUID))
 
 			user.UUIDKey = RandomString(keyUUIDLen)
-			go user.UpdateUUIDKey(r, s.db)
+			if err := user.UpdateUUIDKey(r, s.db); err != nil {
+				WriteError(w, r, http.StatusInternalServerError, err.Error())
+				return
+			}
 		} else {
 			user.UUIDKey = ""
 		}
@@ -231,11 +237,17 @@ func (s *Server) CreateCodeHandler(w http.ResponseWriter, r *http.Request) {
 		// set perm code at client request
 		expectedPermCode := r.Form.Get("perm_user_code")
 		if len(expectedPermCode) != 0 {
-			SetUsersPermCode(r, s.db, &user, expectedPermCode)
+			if err := SetUsersPermCode(r, s.db, &user, expectedPermCode); err != nil {
+				WriteError(w, r, http.StatusInternalServerError, err.Error())
+				return
+			}
 		}
 
 		user.Expiry = time.Now().Add(time.Minute * time.Duration(user.WantedMins)).UTC()
-		go user.Update(r, s.db)
+		if err := user.Update(r, s.db); err != nil {
+			WriteError(w, r, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 
 	_ = WriteJSON(w, user)
@@ -375,7 +387,11 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			Log(r, log.WarnLevel, err.Error())
+		}
+	}()
 
 	// verify session data from InitUploadHandler against actual file Size
 	// should be less than expected as it should have been compressed since.
@@ -386,7 +402,7 @@ func (s *Server) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// write file to minio
-	objectName := RandomString(userDirLen) + "_" + handler.Filename
+	objectName := RandomString(userDirLen) + "/" + handler.Filename
 	_, err = tminio.PutObject(r, s.minio, context.Background(), bucketName, objectName, file, handler.Size,
 		minio.PutObjectOptions{
 			ContentType: fileContentType,
@@ -447,6 +463,7 @@ func (s *Server) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	obj, err := tminio.GetObject(r, s.minio, context.Background(), bucketName, objectName, minio.GetObjectOptions{})
 	if err != nil {
 		WriteError(w, r, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	fi, err := obj.Stat()
