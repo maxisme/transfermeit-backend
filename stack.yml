@@ -38,5 +38,7 @@ networks:
     external: true
   logging:
     external: true
+  tracing:
+    external: true
   minio_tmi:
     driver: overlay
