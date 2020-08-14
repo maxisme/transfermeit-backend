@@ -125,34 +125,34 @@ func main() {
 
 	r := chi.NewRouter()
 
-	r.Group(func(mux chi.Router) {
-		mux.HandleFunc("/health", func(writer http.ResponseWriter, request *http.Request) {})
-	})
-
-	// middleware
-	r.Use(middleware.RealIP)
-	r.Use(middleware.Recoverer)
-	r.Use(sentryMiddleware.Handle)
-	r.Use(tracer.Middleware)
-	r.HandleFunc("/live", s.LiveHandler)
-	r.HandleFunc("/trace", func(w http.ResponseWriter, r *http.Request) {
-		span := tracer.GetSpan(r, "child-span")
-		_, _ = w.Write([]byte(fmt.Sprintf("%v", r.Header)))
-		span.End()
-	})
+	r.HandleFunc("/health", func(writer http.ResponseWriter, request *http.Request) {})
 
 	r.Group(func(mux chi.Router) {
-		mux.Use(ServerKeyMiddleware)
+		// middleware
+		mux.Use(middleware.RealIP)
+		mux.Use(middleware.Recoverer)
+		mux.Use(sentryMiddleware.Handle)
+		mux.Use(tracer.Middleware)
+		mux.HandleFunc("/live", s.LiveHandler)
+		mux.HandleFunc("/trace", func(w http.ResponseWriter, r *http.Request) {
+			span := tracer.GetSpan(r, "child-span")
+			_, _ = w.Write([]byte(fmt.Sprintf("%v", r.Header)))
+			span.End()
+		})
 
-		mux.HandleFunc("/ws", s.WSHandler)
-		mux.HandleFunc("/code", s.CreateCodeHandler)
-		mux.HandleFunc("/init-upload", s.InitUploadHandler)
-		mux.HandleFunc("/upload", s.UploadHandler)
-		mux.HandleFunc("/download", s.DownloadHandler)
-		mux.HandleFunc("/completed-download", s.CompletedDownloadHandler)
-		mux.HandleFunc("/register", s.RegisterCreditHandler)
-		mux.HandleFunc("/toggle-perm-code", s.TogglePermCodeHandler)
-		mux.HandleFunc("/custom-code", s.CustomCodeHandler)
+		mux.Group(func(mux2 chi.Router) {
+			mux2.Use(ServerKeyMiddleware)
+
+			mux2.HandleFunc("/ws", s.WSHandler)
+			mux2.HandleFunc("/code", s.CreateCodeHandler)
+			mux2.HandleFunc("/init-upload", s.InitUploadHandler)
+			mux2.HandleFunc("/upload", s.UploadHandler)
+			mux2.HandleFunc("/download", s.DownloadHandler)
+			mux2.HandleFunc("/completed-download", s.CompletedDownloadHandler)
+			mux2.HandleFunc("/register", s.RegisterCreditHandler)
+			mux2.HandleFunc("/toggle-perm-code", s.TogglePermCodeHandler)
+			mux2.HandleFunc("/custom-code", s.CustomCodeHandler)
+		})
 	})
 
 	graceful.ListenAndServe(&http.Server{Addr: ":8080", Handler: r})
