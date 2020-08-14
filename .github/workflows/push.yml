@@ -45,18 +45,20 @@ jobs:
       - name: Update Swarm Master
         if: github.ref == 'refs/heads/master'
         run: |
+          export sha="${{ github.sha }}"
           curl -f -X POST ${{ secrets.SWARM_HOOK }} \
           -H 'Content-Type: application/x-www-form-urlencoded' \
           -d 'service=transfermeit-backend_app' \
-          -d "repo=${{ github.repository }}" \
-          -d "sha=${{ github.sha }}" \
+          -d "image=${{ github.repository }}" \
+          -d "tag=sha-${sha:0:7}" \
           -d "token=${{ secrets.HOOK_TOKEN }}"
       - name: Update Swarm Develop
         if: github.ref == 'refs/heads/develop'
         run: |
+          export sha="${{ github.sha }}"
           curl -f -X POST ${{ secrets.SWARM_HOOK }} \
           -H 'Content-Type: application/x-www-form-urlencoded' \
           -d 'service=dev-transfermeit-backend_app' \
-          -d "repo=${{ github.repository }}" \
-          -d "sha=${{ github.sha }}" \
+          -d "image=${{ github.repository }}" \
+          -d "tag=sha-${sha:0:7}" \
           -d "token=${{ secrets.HOOK_TOKEN }}"
