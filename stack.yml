@@ -34,8 +34,6 @@ services:
     image: migrate/migrate
     networks:
       - db
-    volumes:
-      - ./sql:/sql
     command: ["-source", "${MIGRATE_SRC:?err}", "-database", "mysql://${DB_HOST:?err}", "up"]
     deploy:
       replicas: 1
