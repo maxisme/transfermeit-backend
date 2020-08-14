@@ -33,6 +33,8 @@ type liveContent struct {
 	Users   []displayUser
 }
 
+var c = cache.New(1*time.Minute, 5*time.Minute)
+
 func getAllDisplayTransfers(r *http.Request, db *sql.DB) ([]displayTransfer, error) {
 	var transfers []displayTransfer
 	if u, found := c.Get("transfers"); found {
@@ -64,7 +66,7 @@ func getAllDisplayTransfers(r *http.Request, db *sql.DB) ([]displayTransfer, err
 			dt.FileSize = BytesToReadable(fileSize)
 			transfers = append(transfers, dt)
 		}
-		rows.Close()
+		_ = rows.Close()
 		c.Set("transfers", transfers, cache.DefaultExpiration)
 	}
 	return transfers, nil

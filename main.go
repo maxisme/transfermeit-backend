@@ -9,14 +9,13 @@ import (
 	"github.com/getsentry/sentry-go"
 	sentryhttp "github.com/getsentry/sentry-go/http"
 	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/middleware"
 	"github.com/go-redis/redis/v7"
 	"github.com/joho/godotenv"
 	"github.com/maxisme/notifi-backend/conn"
 	"github.com/maxisme/notifi-backend/ws"
 	"github.com/maxisme/transfermeit-backend/tracer"
 	"github.com/minio/minio-go/v7"
-	"github.com/patrickmn/go-cache"
-	"github.com/robfig/cron"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/boj/redistore.v1"
 
@@ -37,7 +36,7 @@ func ServerKeyMiddleware(next http.Handler) http.Handler {
 	return tollbooth.LimitFuncHandler(tollbooth.NewLimiter(
 		2,
 		&limiter.ExpirableOptions{DefaultExpirationTTL: time.Hour},
-	).SetIPLookups([]string{"RemoteAddr", "X-Forwarded-For", "X-Real-IP"}), func(w http.ResponseWriter, r *http.Request) {
+	).SetIPLookups([]string{"X-Real-IP"}), func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Sec-Key") != os.Getenv("SERVER_KEY") {
 			WriteError(w, r, http.StatusForbidden, "Invalid server key")
 			return
@@ -46,9 +45,7 @@ func ServerKeyMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-var c = cache.New(1*time.Minute, 5*time.Minute)
-
-// Server is used for database pooling - sharing the db connection to the web handlers.
+// Server
 type Server struct {
 	db      *sql.DB
 	minio   *minio.Client
@@ -114,24 +111,27 @@ func main() {
 		funnels: &ws.Funnels{Clients: make(map[string]*ws.Funnel), StoreOnFailure: true},
 	}
 
-	// clean up cron
-	c := cron.New()
-	err = c.AddFunc("@every 1m", func() {
-		if err := s.CleanExpiredTransfers(nil); err != nil {
-			log.Error(err)
-		}
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-	c.Start()
+	// initiate file clean up cron TODO move to seperate service
+	//c := cron.New()
+	//err = c.AddFunc("@every 1m", func() {
+	//	if err := s.CleanExpiredTransfers(nil); err != nil {
+	//		log.Error(err)
+	//	}
+	//})
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	//c.Start()
 
 	r := chi.NewRouter()
 
+	r.HandleFunc("/health", func(writer http.ResponseWriter, request *http.Request) {})
+
 	// middleware
+	r.Use(middleware.RealIP)
+	r.Use(middleware.Recoverer)
 	r.Use(sentryMiddleware.Handle)
 	r.Use(tracer.Middleware)
-	r.HandleFunc("/health", func(writer http.ResponseWriter, request *http.Request) {})
 	r.HandleFunc("/live", s.LiveHandler)
 	r.HandleFunc("/trace", func(w http.ResponseWriter, r *http.Request) {
 		span := tracer.GetSpan(r, "child-span")
@@ -142,7 +142,6 @@ func main() {
 	r.Group(func(mux chi.Router) {
 		mux.Use(ServerKeyMiddleware)
 
-		// HANDLERS
 		mux.HandleFunc("/ws", s.WSHandler)
 		mux.HandleFunc("/code", s.CreateCodeHandler)
 		mux.HandleFunc("/init-upload", s.InitUploadHandler)
