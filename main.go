@@ -141,6 +141,7 @@ func main() {
 		})
 
 		mux.Group(func(mux2 chi.Router) {
+			// handlers with ServerKeyMiddleware
 			mux2.Use(ServerKeyMiddleware)
 
 			mux2.HandleFunc("/ws", s.WSHandler)
