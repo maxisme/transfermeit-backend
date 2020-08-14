@@ -13,11 +13,9 @@ services:
       mode: global
       labels:
         - "traefik.enable=true"
-        - "traefik.http.routers.transfermeit-backend.rule=Host(`${SUBDOM}sock.transferme.it`)"
-        - "traefik.http.routers.transfermeit-backend.entrypoints=web-secure"
-        - "traefik.http.routers.transfermeit-backend.tls.certresolver=letsencrypt"
-        - "traefik.http.routers.transfermeit-backend.middlewares=404"
-        - "traefik.http.services.transfermeit-backend.loadbalancer.server.port=8080"
+        - "traefik.http.routers.${SUBDOM}transfermeit-backend.rule=Host(`${SUBDOM}sock.transferme.it`)"
+        - "traefik.http.routers.${SUBDOM}transfermeit-backend.middlewares=404"
+        - "traefik.http.services.${SUBDOM}transfermeit-backend.loadbalancer.server.port=8080"
     networks:
       - traefik
       - db
