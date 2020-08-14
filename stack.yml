@@ -4,7 +4,12 @@ services:
     image: maxisme/transfermeit-backend:${TAG:?err}
     env_file:
       - "${ENV_FILE:?err}"
+    stop_grace_period: 30s
     deploy:
+      update_config:
+        delay: 2m
+        parallelism: 1
+        failure_action: rollback
       mode: global
       labels:
         - "traefik.enable=true"
