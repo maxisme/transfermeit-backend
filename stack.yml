@@ -17,6 +17,7 @@ services:
       - traefik
       - db
       - logging
+      - tracing
 
   migrate:
     image: migrate/migrate
