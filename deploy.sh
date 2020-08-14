@@ -1,4 +1,5 @@
 #!/bin/bash
 git pull
-export $(grep -v '^#' .env | xargs)
-docker stack deploy -c stack.yml transfmeit-backend
+export ENV_FILE=".env"
+export $(grep -v '^#' $ENV_FILE | xargs)
+docker stack deploy -c stack.yml dev-transfmeit-backend

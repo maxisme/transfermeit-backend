@@ -3,7 +3,7 @@ services:
   app:
     image: maxisme/transfermeit-backend:${TAG:?err}
     env_file:
-      - ".env"
+      - "${ENV_FILE:?err}"
     deploy:
       mode: global
       labels:
@@ -21,7 +21,7 @@ services:
   minio:
     image: minio/minio
     env_file:
-      - ".env"
+      - "${ENV_FILE:?err}"
     volumes:
       - ./minio:/export
     deploy:
