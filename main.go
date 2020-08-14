@@ -125,7 +125,9 @@ func main() {
 
 	r := chi.NewRouter()
 
-	r.HandleFunc("/health", func(writer http.ResponseWriter, request *http.Request) {})
+	r.Group(func(mux chi.Router) {
+		mux.HandleFunc("/health", func(writer http.ResponseWriter, request *http.Request) {})
+	})
 
 	// middleware
 	r.Use(middleware.RealIP)
