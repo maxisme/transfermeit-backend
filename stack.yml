@@ -20,16 +20,6 @@ services:
       - db
       - logging
 
-  minio:
-    image: minio/minio
-    env_file:
-      - "${ENV_FILE:?err}"
-    deploy:
-      mode: global
-    command: server http://minio/export
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-
   migrate:
     image: migrate/migrate
     networks:
@@ -49,3 +39,5 @@ networks:
     external: true
   logging:
     external: true
+  minio_tmi:
+    driver: overlay
