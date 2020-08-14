@@ -36,8 +36,9 @@ services:
       - db
     volumes:
       - ./sql:/sql
-    command: ["-path", "/sql", "-database", "mysql://${DB_HOST:?err}", "up"]
+    command: ["-source", "${MIGRATE_SRC:?err}", "-database", "mysql://${DB_HOST:?err}", "up"]
     deploy:
+      replicas: 1
       placement:
         constraints: [node.role == manager]
       restart_policy:
