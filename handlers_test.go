@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"github.com/maxisme/notifi-backend/ws"
 	"github.com/minio/minio-go/v7"
 	"math"
 	"net/http"
@@ -97,21 +97,7 @@ func TestUploadDownloadCycle(t *testing.T) {
 	user1, form1 := createUser()
 	user2, form2 := createUser()
 	_, _, user1Ws, _ := connectWSS(user1, form1)
-	funnel := &ws.Funnel{
-		Key:    user1.UUID,
-		WSConn: user1Ws,
-		PubSub: s.redis.Subscribe(user1.UUID),
-	}
-	s.funnels.Add(s.redis, funnel)
 	_, _, user2Ws, _ := connectWSS(user2, form2)
-	funnel2 := &ws.Funnel{
-		Key:    user2.UUID,
-		WSConn: user2Ws,
-		PubSub: s.redis.Subscribe(user2.UUID),
-	}
-	s.funnels.Add(s.redis, funnel2)
-	defer s.funnels.Remove(funnel)
-	defer s.funnels.Remove(funnel2)
 
 	// UPLOAD
 	fileSize := MegabytesToBytes(10)
@@ -121,7 +107,7 @@ func TestUploadDownloadCycle(t *testing.T) {
 
 	// fetch initial message containing download file path that was sent when user was not connected to web socket
 
-	message := readSocketMessage(funnel2.WSConn)
+	message := readSocketMessage(user2Ws)
 	objectName := message.ObjectPath
 	user2Ws.Close()
 
@@ -216,12 +202,6 @@ func TestTwoPendingTransfers(t *testing.T) {
 	user1, form1 := createUser()
 	user2, _ := createUser()
 	_, _, user1Ws, _ := connectWSS(user1, form1)
-	funnel := &ws.Funnel{
-		Key:    user1.UUID,
-		WSConn: user1Ws,
-		PubSub: s.redis.Subscribe(user1.UUID),
-	}
-	s.funnels.Add(s.redis, funnel)
 
 	_ = initUpload(form1, user1, user2, 10)
 	_ = initUpload(form1, user1, user2, 10)
@@ -357,7 +337,7 @@ var invalidHandlerMethods = []struct {
 // request handlers with incorrect methods
 func TestInvalidHandlerMethods(t *testing.T) {
 	for i, tt := range invalidHandlerMethods {
-		t.Run(string(i), func(t *testing.T) {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			req, _ := http.NewRequest(tt.invalidMethod, "", nil)
 
 			rr := httptest.NewRecorder()
@@ -383,7 +363,7 @@ var userLoginDetailsHandlers = []struct {
 
 func TestInvalidIsValidUsers(t *testing.T) {
 	for i, tt := range userLoginDetailsHandlers {
-		t.Run(string(i), func(t *testing.T) {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
 
 			invalidUserLogin := url.Values{}
 			invalidUserLogin.Set("UUID", "")

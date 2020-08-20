@@ -67,6 +67,7 @@ func main() {
 	}
 	sentryMiddleware := sentryhttp.New(sentryhttp.Options{})
 
+	// tracing
 	if os.Getenv("COLLECTOR_HOSTNAME") != "" {
 		// start tracer
 		fn, err := tracer.InitJaegerExporter("Transfer Me It", os.Getenv("COLLECTOR_HOSTNAME"))
@@ -128,11 +129,11 @@ func main() {
 	r.HandleFunc("/health", func(writer http.ResponseWriter, request *http.Request) {})
 
 	r.Group(func(mux chi.Router) {
-		// middleware
 		mux.Use(middleware.RealIP)
 		mux.Use(middleware.Recoverer)
-		mux.Use(sentryMiddleware.Handle)
 		mux.Use(tracer.Middleware)
+		mux.Use(sentryMiddleware.Handle)
+
 		mux.HandleFunc("/live", s.LiveHandler)
 		mux.HandleFunc("/trace", func(w http.ResponseWriter, r *http.Request) {
 			span := tracer.GetSpan(r, "child-span")

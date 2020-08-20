@@ -84,7 +84,7 @@ func initDB(t *testing.M) {
 	if err != nil {
 		panic(err)
 	} // create redis cookie store
-	redisStore, err := redistore.NewRediStore(30, "tcp", "127.0.0.1:6379", "", []byte("rps2P8irs0mT5uCgicv8m5PMq9a6WyzbxL7HWeRK"))
+	redisStore, err := redistore.NewRediStore(10, "tcp", "127.0.0.1:6379", "", []byte("rps2P8irs0mT5uCgicv8m5PMq9a6WyzbxL7HWeRK"))
 	if err != nil {
 		panic(err)
 	}

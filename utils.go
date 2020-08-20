@@ -7,14 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/getsentry/sentry-go"
-	log "github.com/sirupsen/logrus"
 	"gopkg.in/boj/redistore.v1"
 	"math"
 	"math/rand"
 	"net/http"
-	"os"
-	"runtime"
 	"strings"
 )
 
@@ -118,13 +114,6 @@ func WriteJSON(w http.ResponseWriter, v interface{}) error {
 	return err
 }
 
-// WriteError will write a http.Error as well as logging the error locally and to Sentry
-func WriteError(w http.ResponseWriter, r *http.Request, code int, message string) {
-	LogWithSkip(r, log.ErrorLevel, 2, message)
-
-	http.Error(w, message, code)
-}
-
 // BytesToReadable converts bytes to a readable string (MB, GB, etc...)
 func BytesToReadable(bytes int64) string {
 	if bytes == 0 {
@@ -140,41 +129,6 @@ func BytesToReadable(bytes int64) string {
 		stringVal,
 		units[int(base)],
 	)
-}
-
-func Log(r *http.Request, level log.Level, args ...interface{}) {
-	LogWithSkip(r, level, 3, args...)
-}
-
-func LogWithSkip(r *http.Request, level log.Level, skip int, args ...interface{}) {
-	fields := log.Fields{}
-	if r != nil {
-		if len(r.Header.Get("X-B3-Traceid")) > 0 {
-			fields["X-B3-Traceid"] = r.Header.Get("X-B3-Traceid")
-		}
-	}
-	if len(os.Getenv("COMMIT_HASH")) > 0 {
-		fields["commit-hash"] = os.Getenv("COMMIT_HASH")[:7]
-	}
-	pc, _, ln, _ := runtime.Caller(skip)
-	details := runtime.FuncForPC(pc)
-	fields["method"] = details.Name()
-	fields["method-line"] = ln
-
-	// write log
-	log.WithFields(fields).Log(level, args...)
-
-	if level == log.ErrorLevel {
-		// log to sentry
-		if hub := sentry.GetHubFromContext(r.Context()); hub != nil {
-			hub.WithScope(func(scope *sentry.Scope) {
-				for key := range fields {
-					scope.SetTag(key, fmt.Sprintf("%v", fields[key]))
-				}
-				hub.CaptureMessage(fmt.Sprint(args...))
-			})
-		}
-	}
 }
 
 func StoreSession(r *http.Request, w http.ResponseWriter, s *redistore.RediStore, name string, val interface{}) error {
